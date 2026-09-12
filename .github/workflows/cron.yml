@@ -1,0 +1,14 @@
+name: Scheduled publish checks
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+jobs:
+  cron-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Vercel cron endpoint
+        run: |
+          curl -fsS "${{ secrets.VERCEL_CRON_URL }}" || echo "Cron URL not configured yet"
