@@ -301,7 +301,7 @@ export const YouTubeModal: React.FC<YouTubeModalProps> = ({
             <div className="flex items-center justify-between gap-2">
               <p className="text-slate-300 font-semibold flex items-center gap-1.5">
                 <Globe className="w-3.5 h-3.5 text-sky-400" />
-                step 1 · verify channel
+                step 1 · connect YouTube
               </p>
 
               <button
@@ -312,10 +312,14 @@ export const YouTubeModal: React.FC<YouTubeModalProps> = ({
                 {googleAuthStatus === 'connecting'
                   ? 'connecting...'
                   : googleAuthStatus === 'connected'
-                  ? 'google connected'
-                  : 'google oauth'}
+                  ? 'connected'
+                  : 'connect Google & YouTube'}
               </button>
             </div>
+
+            <p className="text-[11px] leading-5 text-slate-500">
+              Sign in once and grant upload permission. The automation worker stores the connection securely for scheduled publishing.
+            </p>
 
             <div className="flex gap-2">
               <input
