@@ -227,7 +227,7 @@ const getYouTubeClientAsync = async () => {
       return getYouTubeClientForCredentials({
         clientId: decryptToken(row.client_id),
         clientSecret: decryptToken(row.client_secret),
-        redirectUri: process.env.GOOGLE_REDIRECT_URI,
+        redirectUri: process.env.GOOGLE_REDIRECT_URI || 'https://super-eyes.vercel.app/oauth/callback',
         refreshToken: decryptToken(row.refresh_token),
       });
     }
