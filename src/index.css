@@ -1,0 +1,291 @@
+@import "tailwindcss";
+@layer base {
+  body {
+    font-family: 'Helvetica Neue', Helvetica, Arial, -apple-system, BlinkMacSystemFont, sans-serif;
+    background-color: #090a0f;
+    color: #e2e8f0;
+    overflow-x: hidden;
+    letter-spacing: -0.015em;
+  }
+}
+/* Swiss minimalist scrollbars */
+::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Editorial shell inspired by aiv2: the studio remains dark and focused,
+   while the product chrome becomes a bright print-like control surface. */
+:root {
+  --paper: #efe9dc;
+  --ink: #0b0b0f;
+  --acid: #c6ff00;
+  --magenta: #ff2d95;
+  --cobalt: #1f2bff;
+  --oxblood: #4a0f1e;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: Georgia, 'Times New Roman', serif;
+  letter-spacing: -0.01em;
+}
+
+.aiv2-shell {
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 91% 7%, rgba(31, 43, 255, 0.12), transparent 28%),
+    radial-gradient(circle at 4% 95%, rgba(255, 45, 149, 0.11), transparent 25%),
+    var(--paper);
+  color: var(--ink);
+}
+
+.aiv2-main {
+  position: relative;
+  padding-right: clamp(5rem, 9vw, 9rem);
+  padding-bottom: 8rem;
+}
+
+.aiv2-nav {
+  position: fixed;
+  z-index: 50;
+  top: 0;
+  right: 0;
+  padding-top: 0.8rem;
+}
+
+.aiv2-nav-list { display: flex; flex-direction: column; align-items: flex-end; }
+.aiv2-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-width: 9rem;
+  padding: 0.38rem 0.75rem 0.34rem 0.6rem;
+  border: 0;
+  border-left: 4px solid var(--ink);
+  background: rgba(239, 233, 220, 0.86);
+  color: var(--ink);
+  font-family: 'Arial Narrow', Impact, sans-serif;
+  font-size: 0.78rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: padding-right 160ms ease, background 160ms ease, color 160ms ease;
+}
+.aiv2-nav-link:hover { padding-right: 1.35rem; background: var(--acid); }
+.aiv2-nav-link.is-active { padding-right: 1.45rem; border-left-color: var(--magenta); background: var(--ink); color: var(--acid); }
+.aiv2-nav-number { opacity: 0.5; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.65rem; }
+.aiv2-brand {
+  position: fixed;
+  z-index: 50;
+  left: 0.75rem;
+  bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  background: var(--magenta);
+  color: var(--ink);
+  font-family: 'Arial Narrow', Impact, sans-serif;
+  font-size: 0.72rem;
+  font-weight: 900;
+  line-height: 0.9;
+  letter-spacing: 0.08em;
+  transform: rotate(-4deg);
+}
+.aiv2-edge-label {
+  position: fixed;
+  z-index: 40;
+  top: 50%;
+  right: 0.3rem;
+  color: rgba(11, 11, 15, 0.55);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.58rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  transform: translateY(-50%) rotate(90deg);
+  transform-origin: right center;
+  pointer-events: none;
+}
+.aiv2-ghost-number {
+  position: absolute;
+  top: 4rem;
+  left: -1rem;
+  z-index: 0;
+  color: transparent;
+  font-family: 'Arial Narrow', Impact, sans-serif;
+  font-size: clamp(9rem, 24vw, 22rem);
+  font-weight: 900;
+  line-height: 0.75;
+  -webkit-text-stroke: 1.5px rgba(11, 11, 15, 0.2);
+  pointer-events: none;
+  user-select: none;
+}
+.aiv2-page-heading {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 2rem;
+  min-height: 12rem;
+  padding: 2.25rem 0 1.25rem;
+}
+.aiv2-kicker {
+  margin-bottom: 0.55rem;
+  color: var(--oxblood);
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.aiv2-display {
+  margin: 0;
+  font-family: 'Arial Narrow', Impact, sans-serif;
+  font-size: clamp(4.5rem, 11vw, 9rem);
+  letter-spacing: -0.07em;
+  line-height: 0.78;
+  text-transform: uppercase;
+}
+.aiv2-display span { color: var(--cobalt); }
+.aiv2-deck { max-width: 26rem; margin: 0 1rem 0 0; font-size: clamp(1.15rem, 2vw, 1.6rem); font-style: italic; line-height: 1.05; }
+.aiv2-section-heading { position: relative; z-index: 1; padding: 2rem 0 1.25rem; border-bottom: 2px solid var(--ink); }
+.aiv2-section-heading span { color: var(--oxblood); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; }
+.aiv2-section-heading h1 { margin: 0.35rem 0 0; font-family: 'Arial Narrow', Impact, sans-serif; font-size: clamp(3rem, 8vw, 7rem); letter-spacing: -0.06em; line-height: 0.8; }
+.aiv2-section-heading p { max-width: 30rem; margin: 1rem 0 0; font-size: 1.25rem; font-style: italic; line-height: 1.05; }
+.aiv2-library-stats, .aiv2-automation-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.aiv2-library-stats > div, .aiv2-automation-stat { display: flex; min-height: 7rem; flex-direction: column; justify-content: space-between; padding: 1rem; background: var(--ink); color: var(--paper); }
+.aiv2-library-stats span, .aiv2-automation-stat span { display: flex; align-items: center; gap: 0.4rem; color: var(--acid); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.aiv2-library-stats strong, .aiv2-automation-stat strong { color: var(--paper); font-family: 'Arial Narrow', Impact, sans-serif; font-size: 3.6rem; line-height: 0.75; }
+.aiv2-library-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.8rem 0; border-top: 2px solid var(--ink); border-bottom: 2px solid var(--ink); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.78rem; text-transform: uppercase; }
+.aiv2-filter { padding: 0.3rem 0.55rem; border: 1px solid var(--ink); background: transparent; color: var(--ink); font-family: inherit; font-size: 0.68rem; text-transform: uppercase; cursor: pointer; }
+.aiv2-filter.is-active, .aiv2-filter:hover { background: var(--ink); color: var(--acid); }
+.aiv2-library-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2.5rem 1.5rem; }
+.aiv2-video-card { min-width: 0; transform: rotate(-0.6deg); }
+.aiv2-video-card:nth-child(even) { transform: rotate(0.8deg); }
+.aiv2-video-frame { position: relative; aspect-ratio: 16 / 9; overflow: hidden; border: 3px solid var(--ink); background: var(--ink); box-shadow: 7px 7px 0 var(--acid); }
+.aiv2-video-frame video { display: block; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.aiv2-video-placeholder { display: flex; height: 100%; align-items: center; justify-content: center; gap: 0.6rem; color: var(--acid); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.75rem; text-transform: uppercase; }
+.aiv2-video-status { position: absolute; top: 0.6rem; left: 0.6rem; padding: 0.25rem 0.45rem; background: var(--paper); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.66rem; text-transform: uppercase; }
+.aiv2-video-copy { padding: 1rem 0.25rem; }
+.aiv2-video-meta { color: var(--oxblood); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.67rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.aiv2-video-copy h2 { margin: 0.35rem 0; font-family: 'Arial Narrow', Impact, sans-serif; font-size: 1.45rem; line-height: 0.95; text-transform: uppercase; }
+.aiv2-video-copy p { margin: 0; font-size: 1rem; font-style: italic; }
+.aiv2-small-button { display: inline-flex; align-items: center; gap: 0.35rem; padding: 0.42rem 0.65rem; border: 2px solid var(--ink); background: var(--ink); color: var(--acid); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.68rem; text-transform: uppercase; cursor: pointer; }
+.aiv2-small-button:hover { background: var(--acid); color: var(--ink); }
+.aiv2-small-button:disabled { opacity: 0.5; cursor: wait; }
+.aiv2-empty { display: flex; max-width: 34rem; flex-direction: column; gap: 0.6rem; padding: 2.5rem; background: var(--oxblood); color: var(--paper); transform: rotate(-1deg); }
+.aiv2-empty h2, .aiv2-planner-panel h2 { margin: 0; font-family: 'Arial Narrow', Impact, sans-serif; font-size: 2.4rem; line-height: 0.85; text-transform: uppercase; }
+.aiv2-empty p, .aiv2-planner-panel p { margin: 0; font-size: 1.15rem; font-style: italic; line-height: 1.05; }
+.aiv2-planner-panel { padding: 1.5rem; background: var(--magenta); color: var(--ink); box-shadow: 7px 7px 0 var(--cobalt); }
+.aiv2-planner-panel .aiv2-kicker { color: var(--ink); }
+.aiv2-channel-list { display: grid; gap: 0.6rem; margin-top: 1.5rem; }
+.aiv2-channel-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.85rem; border-top: 2px solid rgba(11,11,15,0.45); }
+.aiv2-channel-row strong { display: block; font-family: 'Arial Narrow', Impact, sans-serif; font-size: 1.35rem; text-transform: uppercase; }
+.aiv2-channel-row span { display: flex; align-items: center; gap: 0.35rem; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.7rem; text-transform: uppercase; }
+.aiv2-empty-inline { padding: 1rem; border-top: 2px solid var(--ink); font-style: italic; }
+.aiv2-inline-feedback { padding: 0.8rem 1rem; border: 2px solid var(--ink); background: var(--acid); font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.75rem; text-transform: uppercase; }
+.aiv2-upcoming-panel { padding: 1.25rem; background: rgba(239, 233, 220, 0.72); border: 2px solid var(--ink); }
+.aiv2-upcoming-list { margin-top: 0.75rem; }
+.aiv2-upcoming-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: 0.8rem 0; border-top: 1px dashed rgba(11, 11, 15, 0.5); }
+.aiv2-upcoming-row strong { display: block; font-family: 'Arial Narrow', Impact, sans-serif; font-size: 1.05rem; text-transform: uppercase; }
+.aiv2-upcoming-row span { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.68rem; text-transform: uppercase; }
+
+/* Make existing dark panels read as deliberate ink blocks on the new shell. */
+.aiv2-shell .bg-\[\#0e1017\],
+.aiv2-shell .bg-\[\#0d1117\],
+.aiv2-shell .bg-slate-900\/90 { box-shadow: 7px 7px 0 var(--acid); }
+
+@media (max-width: 700px) {
+  .aiv2-main { padding-right: 3.8rem; }
+  .aiv2-page-heading { display: block; min-height: 0; padding-top: 1.3rem; }
+  .aiv2-deck { margin-top: 1.25rem; }
+  .aiv2-nav-link { min-width: 7.4rem; font-size: 0.66rem; }
+  .aiv2-edge-label { display: none; }
+  .aiv2-library-stats, .aiv2-automation-grid, .aiv2-library-grid { grid-template-columns: 1fr; }
+  .aiv2-library-toolbar, .aiv2-channel-row { align-items: flex-start; flex-direction: column; }
+}
+
+/* Calm workspace refresh: the product should feel like a focused studio,
+   not a poster or a game dashboard. */
+:root {
+  --paper: #0b1018;
+  --ink: #edf3f8;
+  --muted: #8d9aaa;
+  --line: rgba(220, 232, 242, 0.11);
+  --panel: #111923;
+  --panel-raised: #17222e;
+  --acid: #86e8c1;
+  --magenta: #86e8c1;
+  --cobalt: #86b8ff;
+  --oxblood: #9fb0c0;
+}
+
+body { background: #0b1018; color: var(--ink); font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; letter-spacing: -0.01em; }
+.aiv2-shell { background: radial-gradient(circle at 80% -10%, rgba(134, 184, 255, 0.12), transparent 32%), #0b1018; color: var(--ink); }
+.aiv2-main { max-width: 1380px; padding: 6rem 2rem 5rem; }
+.aiv2-nav { position: fixed; inset: 0 0 auto; height: 4.25rem; padding: 0 1.5rem; border-bottom: 1px solid var(--line); background: rgba(11, 16, 24, 0.9); backdrop-filter: blur(18px); }
+.aiv2-nav-list { height: 100%; flex-direction: row; align-items: center; justify-content: flex-end; gap: 0.2rem; }
+.aiv2-nav-link { min-width: auto; height: 2.35rem; padding: 0 0.8rem; border: 0; border-radius: 0.55rem; background: transparent; color: var(--muted); font-family: inherit; font-size: 0.75rem; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.aiv2-nav-link:hover { padding-right: 0.8rem; background: rgba(255,255,255,0.06); color: var(--ink); }
+.aiv2-nav-link.is-active { padding-right: 0.8rem; border: 1px solid rgba(134,232,193,0.28); background: rgba(134,232,193,0.1); color: var(--acid); }
+.aiv2-nav-number { display: none; }
+.aiv2-brand { position: fixed; top: 1.05rem; bottom: auto; left: 1.5rem; padding: 0; background: transparent; color: var(--ink); font-family: inherit; font-size: 0.78rem; font-weight: 700; line-height: 1; letter-spacing: 0.12em; transform: none; }
+.aiv2-brand svg { color: var(--acid); }
+.aiv2-edge-label, .aiv2-ghost-number { display: none; }
+.aiv2-page-heading { min-height: 0; padding: 1rem 0 2rem; align-items: flex-start; }
+.aiv2-kicker { margin-bottom: 0.6rem; color: var(--acid); font-family: inherit; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.11em; }
+.aiv2-display, .aiv2-section-heading h1 { font-family: inherit; font-size: clamp(2rem, 5vw, 3.6rem); font-weight: 700; letter-spacing: -0.055em; line-height: 1; text-transform: none; }
+.aiv2-display span { color: var(--acid); }
+.aiv2-deck, .aiv2-section-heading p { max-width: 32rem; color: var(--muted); font-size: 0.95rem; font-style: normal; line-height: 1.5; }
+.aiv2-section-heading { padding: 1rem 0 1.5rem; border-bottom: 1px solid var(--line); }
+.aiv2-section-heading p { margin-top: 0.7rem; }
+.aiv2-library-stats, .aiv2-automation-grid { gap: 0.8rem; }
+.aiv2-library-stats > div, .aiv2-automation-stat { min-height: 6rem; padding: 1rem; border: 1px solid var(--line); border-radius: 0.8rem; background: var(--panel); color: var(--ink); }
+.aiv2-library-stats span, .aiv2-automation-stat span { color: var(--muted); font-family: inherit; font-size: 0.72rem; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.aiv2-library-stats strong, .aiv2-automation-stat strong { color: var(--ink); font-family: inherit; font-size: 2.2rem; line-height: 1; }
+.aiv2-library-toolbar { border-color: var(--line); color: var(--muted); font-family: inherit; font-size: 0.8rem; text-transform: none; }
+.aiv2-filter { border-color: var(--line); border-radius: 0.45rem; color: var(--muted); font-family: inherit; font-size: 0.75rem; text-transform: none; }
+.aiv2-filter.is-active, .aiv2-filter:hover { background: rgba(134,232,193,0.1); color: var(--acid); }
+.aiv2-library-grid { gap: 1rem; }
+.aiv2-video-card, .aiv2-video-card:nth-child(even) { transform: none; }
+.aiv2-video-frame { border: 1px solid var(--line); border-radius: 0.8rem; box-shadow: none; }
+.aiv2-video-status { border-radius: 0.35rem; background: rgba(11,16,24,0.82); color: var(--acid); font-family: inherit; font-size: 0.68rem; text-transform: none; }
+.aiv2-video-copy { padding: 0.85rem 0.1rem; }
+.aiv2-video-meta { color: var(--muted); font-family: inherit; font-size: 0.72rem; letter-spacing: 0; text-transform: none; }
+.aiv2-video-copy h2 { font-family: inherit; font-size: 1.05rem; font-weight: 650; line-height: 1.25; text-transform: none; }
+.aiv2-video-copy p { color: var(--muted); font-size: 0.85rem; font-style: normal; }
+.aiv2-small-button { border: 1px solid rgba(134,232,193,0.3); border-radius: 0.5rem; background: rgba(134,232,193,0.1); color: var(--acid); font-family: inherit; font-size: 0.74rem; font-weight: 600; text-transform: none; }
+.aiv2-small-button:hover { background: var(--acid); color: #0b1018; }
+.aiv2-empty, .aiv2-planner-panel { border: 1px solid var(--line); border-radius: 0.8rem; background: var(--panel); color: var(--ink); box-shadow: none; transform: none; }
+.aiv2-empty h2, .aiv2-planner-panel h2 { font-family: inherit; font-size: 1.45rem; line-height: 1.1; text-transform: none; }
+.aiv2-empty p, .aiv2-planner-panel p { color: var(--muted); font-size: 0.9rem; font-style: normal; line-height: 1.5; }
+.aiv2-planner-panel .aiv2-kicker { color: var(--acid); }
+.aiv2-channel-row { border-color: var(--line); }
+.aiv2-channel-row strong { font-family: inherit; font-size: 0.95rem; text-transform: none; }
+.aiv2-channel-row span, .aiv2-upcoming-row span { color: var(--muted); font-family: inherit; font-size: 0.75rem; text-transform: none; }
+.aiv2-inline-feedback { border: 1px solid rgba(134,232,193,0.3); border-radius: 0.55rem; background: rgba(134,232,193,0.1); color: var(--acid); font-family: inherit; font-size: 0.8rem; text-transform: none; }
+.aiv2-upcoming-panel { border: 1px solid var(--line); border-radius: 0.8rem; background: var(--panel); }
+.aiv2-upcoming-row { border-color: var(--line); }
+.aiv2-upcoming-row strong { font-family: inherit; font-size: 0.9rem; font-weight: 600; text-transform: none; }
+.aiv2-shell .bg-\[\#0e1017\], .aiv2-shell .bg-\[\#0d1117\], .aiv2-shell .bg-slate-900\/90 { box-shadow: none; border-color: var(--line); }
+
+@media (max-width: 700px) {
+  .aiv2-main { padding: 5.5rem 1rem 3rem; }
+  .aiv2-nav { padding: 0 0.6rem; }
+  .aiv2-nav-list { justify-content: flex-end; overflow-x: auto; }
+  .aiv2-nav-link { padding: 0 0.55rem; font-size: 0.68rem; }
+  .aiv2-brand { left: 0.75rem; }
+}
