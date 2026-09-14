@@ -30,6 +30,7 @@ const dbPool = DATABASE_URL ? new Pool({
   max: 5,
   ssl: DATABASE_URL.includes('localhost') || DATABASE_URL.includes('127.0.0.1') ? false : { rejectUnauthorized: false },
 }) : null;
+const TOKEN_ENCRYPTION_KEY = process.env.OAUTH_TOKEN_ENCRYPTION_KEY || '';
 
 const setCorsHeaders = (res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -58,6 +59,17 @@ const ensureJobsStore = async () => {
     `);
     await dbPool.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'queued'`);
     await dbPool.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error TEXT`);
+    await dbPool.query(`
+      CREATE TABLE IF NOT EXISTS youtube_connections (
+        id TEXT PRIMARY KEY,
+        channel_id TEXT NOT NULL,
+        channel_name TEXT,
+        channel_handle TEXT,
+        refresh_token TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `);
     return;
   }
 
@@ -158,19 +170,64 @@ const recoverStaleJobs = async () => {
   if (changed) await saveJobs(jobs);
 };
 
+const getYouTubeClientForCredentials = ({ clientId, clientSecret, redirectUri, refreshToken }) => {
+  if (!clientId || !clientSecret || !redirectUri || !refreshToken) return null;
+  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
+  oauth2Client.setCredentials({ refresh_token: refreshToken });
+  return google.youtube({ version: 'v3', auth: oauth2Client });
+};
+
 const getYouTubeClient = () => {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const redirectUri = process.env.GOOGLE_REDIRECT_URI;
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  return getYouTubeClientForCredentials({ clientId, clientSecret, redirectUri, refreshToken });
+};
 
-  if (!clientId || !clientSecret || !redirectUri || !refreshToken) {
-    return null;
+const encryptToken = (value) => {
+  if (!TOKEN_ENCRYPTION_KEY) throw new Error('OAUTH_TOKEN_ENCRYPTION_KEY is not configured.');
+  const key = crypto.createHash('sha256').update(TOKEN_ENCRYPTION_KEY).digest();
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
+  return `${iv.toString('base64url')}.${cipher.getAuthTag().toString('base64url')}.${encrypted.toString('base64url')}`;
+};
+
+const decryptToken = (value) => {
+  if (!TOKEN_ENCRYPTION_KEY) throw new Error('OAUTH_TOKEN_ENCRYPTION_KEY is not configured.');
+  const [ivText, tagText, encryptedText] = String(value).split('.');
+  const key = crypto.createHash('sha256').update(TOKEN_ENCRYPTION_KEY).digest();
+  const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivText, 'base64url'));
+  decipher.setAuthTag(Buffer.from(tagText, 'base64url'));
+  return Buffer.concat([decipher.update(Buffer.from(encryptedText, 'base64url')), decipher.final()]).toString('utf8');
+};
+
+const saveYouTubeConnection = async ({ channelId, channelName, channelHandle, refreshToken }) => {
+  if (!dbPool) throw new Error('A Neon database is required to save the YouTube connection.');
+  await dbPool.query(
+    `INSERT INTO youtube_connections (id, channel_id, channel_name, channel_handle, refresh_token)
+     VALUES ('primary', $1, $2, $3, $4)
+     ON CONFLICT (id) DO UPDATE SET channel_id = EXCLUDED.channel_id, channel_name = EXCLUDED.channel_name,
+       channel_handle = EXCLUDED.channel_handle, refresh_token = EXCLUDED.refresh_token, updated_at = NOW()`,
+    [channelId, channelName || null, channelHandle || null, encryptToken(refreshToken)]
+  );
+};
+
+const getYouTubeClientAsync = async () => {
+  if (dbPool && TOKEN_ENCRYPTION_KEY) {
+    const { rows } = await dbPool.query('SELECT refresh_token FROM youtube_connections WHERE id = $1', ['primary']);
+    const row = rows[0];
+    if (row) {
+      return getYouTubeClientForCredentials({
+        clientId: process.env.GOOGLE_CLIENT_ID,
+        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        redirectUri: process.env.GOOGLE_REDIRECT_URI,
+        refreshToken: decryptToken(row.refresh_token),
+      });
+    }
   }
-
-  const oauth2Client = new google.auth.OAuth2(clientId, clientSecret, redirectUri);
-  oauth2Client.setCredentials({ refresh_token: refreshToken });
-  return google.youtube({ version: 'v3', auth: oauth2Client });
+  return getYouTubeClient();
 };
 
 const parseJsonBody = async (req) => {
@@ -537,7 +594,7 @@ const generateStudioThumbnail = async (payload) => {
 };
 
 const uploadToYouTube = async (payload) => {
-  const youtube = getYouTubeClient();
+  const youtube = await getYouTubeClientAsync();
   if (!youtube) {
     throw new Error('YouTube OAuth is not configured. Set GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REDIRECT_URI, and GOOGLE_REFRESH_TOKEN in a .env file.');
   }
@@ -660,7 +717,7 @@ const getScheduledAt = (job) => {
 };
 
 const publishScheduledJobs = async () => {
-  if (!getYouTubeClient()) return;
+  if (!(await getYouTubeClientAsync())) return;
   const jobs = await loadJobs();
   const due = jobs.filter((job) => job.status === 'scheduled' && job.filePath && (getScheduledAt(job)?.getTime() ?? 0) <= Date.now());
 
@@ -760,7 +817,7 @@ const processJob = async (renderFutureJobs = true) => {
 
   // Rendering and publishing are separate lifecycle stages. A missing YouTube
   // OAuth configuration must not discard an otherwise valid rendered video.
-  if (!getYouTubeClient()) {
+  if (!(await getYouTubeClientAsync())) {
     await updateJobStatus(job.id, 'ready', {
       progress: 100,
       stage: 'ready · YouTube upload not configured',
@@ -878,8 +935,28 @@ const server = http.createServer(async (req, res) => {
       });
       const tokens = await tokenResponse.json();
       if (!tokenResponse.ok) throw new Error(tokens.error_description || tokens.error || 'Google token exchange failed.');
+      if (!tokens.refresh_token) throw new Error('Google did not return a refresh token. Reconnect with consent to grant YouTube upload access.');
+      const channelResponse = await fetch('https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true', {
+        headers: { Authorization: `Bearer ${tokens.access_token}`, Accept: 'application/json' },
+      });
+      const channelData = await channelResponse.json();
+      const item = channelData.items?.[0];
+      if (!channelResponse.ok || !item) throw new Error(channelData.error?.message || 'No YouTube channel found for this Google account.');
+      const channelName = item.snippet?.title || 'Connected YouTube channel';
+      const channelHandle = item.snippet?.customUrl ? `@${String(item.snippet.customUrl).replace(/^@/, '')}` : '@channel';
+      await saveYouTubeConnection({ channelId: item.id, channelName, channelHandle, refreshToken: tokens.refresh_token });
       res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({ success: true, tokens }));
+      res.end(JSON.stringify({
+        success: true,
+        channel: {
+          title: channelName,
+          handle: channelHandle,
+          channelId: item.id,
+          avatarUrl: item.snippet?.thumbnails?.default?.url || '',
+          subscriberCount: item.statistics?.subscriberCount ? `${Number(item.statistics.subscriberCount).toLocaleString()} subscribers` : 'connected',
+        },
+        tokens: { access_token: tokens.access_token, expires_in: tokens.expires_in, scope: tokens.scope },
+      }));
     } catch (error) {
       res.writeHead(400, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }));
@@ -926,7 +1003,7 @@ const server = http.createServer(async (req, res) => {
 
   if (req.method === 'GET' && url.pathname === '/api/health') {
     res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, service: 'eye-training-youtube-webhook', configured: !!getYouTubeClient(), database: DATABASE_URL ? 'postgres' : 'json-fallback' }));
+    res.end(JSON.stringify({ ok: true, service: 'eye-training-youtube-webhook', configured: Boolean(await getYouTubeClientAsync()), database: DATABASE_URL ? 'postgres' : 'json-fallback' }));
     return;
   }
 

@@ -47,7 +47,7 @@ export function buildGoogleAuthUrl(codeChallenge: string): string {
   url.searchParams.set('client_id', GOOGLE_CLIENT_ID);
   url.searchParams.set('redirect_uri', GOOGLE_REDIRECT_URI);
   url.searchParams.set('response_type', 'code');
-  url.searchParams.set('scope', 'openid email profile https://www.googleapis.com/auth/youtube.readonly');
+  url.searchParams.set('scope', 'openid email profile https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload');
   url.searchParams.set('access_type', 'offline');
   url.searchParams.set('prompt', 'consent');
   url.searchParams.set('code_challenge', codeChallenge);

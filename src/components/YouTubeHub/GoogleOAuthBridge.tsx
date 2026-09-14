@@ -49,7 +49,7 @@ export const GoogleOAuthBridge: React.FC<GoogleOAuthBridgeProps> = ({
       authUrl.searchParams.set('client_id', clientId);
       authUrl.searchParams.set('redirect_uri', GOOGLE_REDIRECT_URI);
       authUrl.searchParams.set('response_type', 'code');
-      authUrl.searchParams.set('scope', 'openid email profile https://www.googleapis.com/auth/youtube.readonly');
+      authUrl.searchParams.set('scope', 'openid email profile https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/youtube.upload');
       authUrl.searchParams.set('access_type', 'offline');
       authUrl.searchParams.set('prompt', 'consent');
       authUrl.searchParams.set('code_challenge', challenge);
