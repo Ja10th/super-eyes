@@ -28,6 +28,10 @@ const client = accountId && accessKeyId && secretAccessKey && bucket
 
 export const isObjectStorageConfigured = Boolean(client && publicBaseUrl);
 
+if (!cloudinaryConfigured && !isObjectStorageConfigured) {
+  console.warn('[storage] no Cloudinary or R2 credentials configured; rendered files will be temporary');
+}
+
 export async function uploadFileToObjectStorage(filePath, key, contentType) {
   if (cloudinaryConfigured) {
     const publicId = `${cloudFolder}/${key.replace(/^\/+|\/+$/g, '').replace(/\.[^.]+$/, '')}`;

@@ -38,6 +38,14 @@ const setCorsHeaders = (res) => {
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 };
 
+const describeError = (error) => {
+  if (error instanceof Error) return error.message;
+  if (error && typeof error === 'object') {
+    try { return JSON.stringify(error); } catch { return 'Unknown object error'; }
+  }
+  return String(error);
+};
+
 const ensureJobsStore = async () => {
   if (dbPool) {
     await dbPool.query(`
@@ -747,7 +755,7 @@ const publishScheduledJobs = async () => {
       await updateJobStatus(job.id, 'ready', {
         progress: 100,
         stage: 'ready · upload pending',
-        error: error instanceof Error ? error.message : String(error),
+        error: describeError(error),
       });
       console.error(`[queue] scheduled post failed ${job.id}:`, error instanceof Error ? error.message : error);
     }
@@ -793,7 +801,7 @@ const processJob = async (renderFutureJobs = true) => {
     await updateJobStatus(job.id, 'failed', {
       progress: 0,
       stage: 'failed',
-      error: error instanceof Error ? error.message : String(error),
+      error: describeError(error),
     });
     console.error(`[queue] render failed ${job.id}:`, error instanceof Error ? error.message : error);
     throw error;
@@ -851,7 +859,7 @@ const processJob = async (renderFutureJobs = true) => {
     });
     return result;
   } catch (error) {
-    const uploadError = error instanceof Error ? error.message : String(error);
+    const uploadError = describeError(error);
     await updateJobStatus(job.id, 'ready', {
       progress: 100,
       stage: 'ready · upload pending',
