@@ -65,11 +65,15 @@ const ensureJobsStore = async () => {
         channel_id TEXT NOT NULL,
         channel_name TEXT,
         channel_handle TEXT,
+        client_id TEXT NOT NULL,
+        client_secret TEXT NOT NULL,
         refresh_token TEXT NOT NULL,
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
     `);
+    await dbPool.query(`ALTER TABLE youtube_connections ADD COLUMN IF NOT EXISTS client_id TEXT`);
+    await dbPool.query(`ALTER TABLE youtube_connections ADD COLUMN IF NOT EXISTS client_secret TEXT`);
     return;
   }
 
@@ -203,25 +207,26 @@ const decryptToken = (value) => {
   return Buffer.concat([decipher.update(Buffer.from(encryptedText, 'base64url')), decipher.final()]).toString('utf8');
 };
 
-const saveYouTubeConnection = async ({ channelId, channelName, channelHandle, refreshToken }) => {
+const saveYouTubeConnection = async ({ channelId, channelName, channelHandle, clientId, clientSecret, refreshToken }) => {
   if (!dbPool) throw new Error('A Neon database is required to save the YouTube connection.');
   await dbPool.query(
-    `INSERT INTO youtube_connections (id, channel_id, channel_name, channel_handle, refresh_token)
-     VALUES ('primary', $1, $2, $3, $4)
+    `INSERT INTO youtube_connections (id, channel_id, channel_name, channel_handle, client_id, client_secret, refresh_token)
+     VALUES ('primary', $1, $2, $3, $4, $5, $6)
      ON CONFLICT (id) DO UPDATE SET channel_id = EXCLUDED.channel_id, channel_name = EXCLUDED.channel_name,
-       channel_handle = EXCLUDED.channel_handle, refresh_token = EXCLUDED.refresh_token, updated_at = NOW()`,
-    [channelId, channelName || null, channelHandle || null, encryptToken(refreshToken)]
+       channel_handle = EXCLUDED.channel_handle, client_id = EXCLUDED.client_id, client_secret = EXCLUDED.client_secret,
+       refresh_token = EXCLUDED.refresh_token, updated_at = NOW()`,
+    [channelId, channelName || null, channelHandle || null, encryptToken(clientId), encryptToken(clientSecret), encryptToken(refreshToken)]
   );
 };
 
 const getYouTubeClientAsync = async () => {
   if (dbPool && TOKEN_ENCRYPTION_KEY) {
-    const { rows } = await dbPool.query('SELECT refresh_token FROM youtube_connections WHERE id = $1', ['primary']);
+    const { rows } = await dbPool.query('SELECT client_id, client_secret, refresh_token FROM youtube_connections WHERE id = $1', ['primary']);
     const row = rows[0];
-    if (row) {
+    if (row?.client_id && row?.client_secret && row?.refresh_token) {
       return getYouTubeClientForCredentials({
-        clientId: process.env.GOOGLE_CLIENT_ID,
-        clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+        clientId: decryptToken(row.client_id),
+        clientSecret: decryptToken(row.client_secret),
         redirectUri: process.env.GOOGLE_REDIRECT_URI,
         refreshToken: decryptToken(row.refresh_token),
       });
@@ -944,7 +949,7 @@ const server = http.createServer(async (req, res) => {
       if (!channelResponse.ok || !item) throw new Error(channelData.error?.message || 'No YouTube channel found for this Google account.');
       const channelName = item.snippet?.title || 'Connected YouTube channel';
       const channelHandle = item.snippet?.customUrl ? `@${String(item.snippet.customUrl).replace(/^@/, '')}` : '@channel';
-      await saveYouTubeConnection({ channelId: item.id, channelName, channelHandle, refreshToken: tokens.refresh_token });
+      await saveYouTubeConnection({ channelId: item.id, channelName, channelHandle, clientId, clientSecret, refreshToken: tokens.refresh_token });
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         success: true,
