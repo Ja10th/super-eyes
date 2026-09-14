@@ -16,10 +16,21 @@ export const AutomationOverview: React.FC<AutomationOverviewProps> = ({ channels
   const active = schedules.filter((post) => post.status === 'rendering' || post.status === 'uploading').length;
   const ready = schedules.filter((post) => post.status === 'ready' || post.status === 'published').length;
 
-  const generate = (channel: YouTubeChannelProfile) => {
+  const generate = async (channel: YouTubeChannelProfile) => {
     setGenerating(channel.id);
-    automationService.generateAutoSchedule(channel, 7);
+    setFeedback(null);
+    const added = automationService.generateAutoSchedule(channel, 7);
+    const existingUnqueued = automationService.getSchedules().filter((post) =>
+      post.channelId === channel.id && post.status === 'scheduled' && !post.backendJobId
+    );
+    const toQueue = Array.from(new Map([...added, ...existingUnqueued].map((post) => [post.id, post])).values());
+    let queued = 0;
+    for (const post of toQueue) {
+      const result = await automationService.triggerPublishWebhook(post);
+      if (result.success) queued += 1;
+    }
     onRefreshSchedules();
+    setFeedback(`generated ${added.length} sessions and queued ${queued} for automatic publishing.`);
     setGenerating(null);
   };
 

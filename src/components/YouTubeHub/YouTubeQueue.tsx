@@ -72,14 +72,24 @@ export const YouTubeQueue: React.FC<YouTubeQueueProps> = ({
     onRefreshSchedules();
   };
 
-  const handleGenerateForChannel = (channel: YouTubeChannelProfile) => {
+  const handleGenerateForChannel = async (channel: YouTubeChannelProfile) => {
     setGenerating(channel.id);
+    setStatusFeedback(null);
     const added = automationService.generateAutoSchedule(channel, 7);
+    const existingUnqueued = automationService.getSchedules().filter((post) =>
+      post.channelId === channel.id && post.status === 'scheduled' && !post.backendJobId
+    );
+    const toQueue = Array.from(new Map([...added, ...existingUnqueued].map((post) => [post.id, post])).values());
+    let queued = 0;
+    for (const post of toQueue) {
+      const result = await automationService.triggerPublishWebhook(post);
+      if (result.success) queued += 1;
+    }
     onRefreshSchedules();
     setGenerating(null);
     setStatusFeedback({
-      msg: `generated ${added.length} upload slots for ${channel.name} (next 7 days).`,
-      ok: true,
+      msg: `generated ${added.length} upload slots and queued ${queued} for ${channel.name}.`,
+      ok: queued === toQueue.length,
     });
     setTimeout(() => setStatusFeedback(null), 5000);
   };
