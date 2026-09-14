@@ -12,6 +12,7 @@ import { spawn, execFile } from 'child_process';
 import pg from 'pg';
 import { renderStudioSession } from './studioRenderer.js';
 import { createCanvas } from '@napi-rs/canvas';
+import { uploadFileToObjectStorage } from './objectStorage.js';
 
 const { Pool } = pg;
 
@@ -585,6 +586,7 @@ const uploadToYouTube = async (payload) => {
     let thumbnailUploaded = false;
     const thumbnailPath = videoId ? await generateStudioThumbnail(payload) : null;
     if (videoId && thumbnailPath) {
+      const thumbnailUrl = await uploadFileToObjectStorage(thumbnailPath, `thumbnails/${videoId}.png`, 'image/png');
       try {
         await youtube.thumbnails.set({
           videoId,
@@ -596,6 +598,7 @@ const uploadToYouTube = async (payload) => {
       } finally {
         await unlink(thumbnailPath).catch(() => {});
       }
+      if (thumbnailUrl) console.log(`[storage] thumbnail stored at ${thumbnailUrl}`);
     }
 
     return {
@@ -689,9 +692,14 @@ const publishScheduledJobs = async () => {
   }
 };
 
-const processJob = async () => {
+const processJob = async (renderFutureJobs = true) => {
   const jobs = await loadJobs();
-  const job = jobs.find((item) => item.status === 'queued');
+  const job = jobs.find((item) => {
+    if (item.status !== 'queued') return false;
+    if (renderFutureJobs) return true;
+    const scheduledAt = getScheduledAt(item);
+    return !scheduledAt || scheduledAt.getTime() <= Date.now();
+  });
   if (!job) return null;
 
   console.log(`[queue] starting ${job.id}: ${job.title}`);
@@ -729,14 +737,22 @@ const processJob = async () => {
     throw error;
   }
 
-  await updateJobStatus(job.id, 'ready', { progress: 86, stage: 'ready', filePath: resolvedRenderSource });
+  const storedRenderSource = await uploadFileToObjectStorage(
+    resolvedRenderSource,
+    `videos/${job.id}.mp4`,
+    'video/mp4',
+  );
+  const persistedRenderSource = storedRenderSource || resolvedRenderSource;
+  if (storedRenderSource) console.log(`[storage] video stored at ${storedRenderSource}`);
+
+  await updateJobStatus(job.id, 'ready', { progress: 86, stage: 'ready', filePath: persistedRenderSource });
 
   const scheduledAt = getScheduledAt(job);
   if (scheduledAt && scheduledAt.getTime() > Date.now() && !job.payload?.forcePostNow && !job.payload?.video?.forcePostNow) {
     await updateJobStatus(job.id, 'scheduled', {
       progress: 100,
       stage: `scheduled for ${scheduledAt.toLocaleString()}`,
-      filePath: resolvedRenderSource,
+      filePath: persistedRenderSource,
     });
     console.log(`[queue] render complete; holding ${job.id} for ${scheduledAt.toISOString()}`);
     return { renderedOnly: true, scheduled: true, filePath: resolvedRenderSource };
@@ -748,7 +764,7 @@ const processJob = async () => {
     await updateJobStatus(job.id, 'ready', {
       progress: 100,
       stage: 'ready · YouTube upload not configured',
-      filePath: resolvedRenderSource,
+      filePath: persistedRenderSource,
       error: 'Video rendered successfully. Configure YouTube OAuth to publish it automatically.',
     });
     return { renderedOnly: true, filePath: resolvedRenderSource };
@@ -767,7 +783,7 @@ const processJob = async () => {
       progress: 100,
       stage: 'published',
       videoId: result.videoId,
-      filePath: resolvedRenderSource,
+      filePath: persistedRenderSource,
       result,
       completedAt: new Date().toISOString(),
     });
@@ -777,7 +793,7 @@ const processJob = async () => {
     await updateJobStatus(job.id, 'ready', {
       progress: 100,
       stage: 'ready · upload pending',
-      filePath: resolvedRenderSource,
+      filePath: persistedRenderSource,
       error: uploadError,
     });
     console.warn(`[queue] render complete; YouTube upload pending for ${job.id}: ${uploadError}`);
@@ -805,6 +821,14 @@ const startQueueWorker = () => {
   queueTimer = setInterval(() => {
     runQueueWorker();
   }, 2500);
+};
+
+const runWorkerOnce = async () => {
+  await ensureJobsStore();
+  await recoverStaleJobs();
+  await processJob(false);
+  await publishScheduledJobs();
+  if (dbPool) await dbPool.end();
 };
 
 const server = http.createServer(async (req, res) => {
@@ -925,9 +949,8 @@ const server = http.createServer(async (req, res) => {
     }
 
     const contentType = fullPath.endsWith('.mp4') ? 'video/mp4' : 'application/octet-stream';
-    const file = await readFile(fullPath);
     res.writeHead(200, { 'Content-Type': contentType, 'Cache-Control': 'no-store' });
-    res.end(file);
+    createReadStream(fullPath).pipe(res);
     return;
   }
 
@@ -938,7 +961,7 @@ const server = http.createServer(async (req, res) => {
         ? await handleMultipartUpload(req)
         : await parseJsonBody(req);
       const job = await enqueueJob(payload);
-      startQueueWorker();
+      if (process.env.DISABLE_QUEUE_WORKER !== 'true') startQueueWorker();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, job }));
       return;
@@ -955,7 +978,7 @@ const server = http.createServer(async (req, res) => {
       const contentType = req.headers['content-type'] || '';
       const payload = contentType.includes('multipart/form-data') ? await handleMultipartUpload(req) : await parseJsonBody(req);
       const job = await enqueueJob(payload);
-      startQueueWorker();
+      if (process.env.DISABLE_QUEUE_WORKER !== 'true') startQueueWorker();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, job }));
       return;
@@ -991,11 +1014,18 @@ server.on('error', (error) => {
   process.exitCode = 1;
 });
 
-server.listen(PORT, HOST, async () => {
+if (process.env.WORKER_ONLY === 'true') {
+  runWorkerOnce().then(() => {
+    console.log('[worker] completed one due-job pass');
+  }).catch((error) => {
+    console.error('[worker] failed:', error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+} else server.listen(PORT, HOST, async () => {
   try {
     await ensureJobsStore();
     await recoverStaleJobs();
-    startQueueWorker();
+    if (process.env.DISABLE_QUEUE_WORKER !== 'true') startQueueWorker();
     console.log(`Local upload webhook server running at http://${HOST}:${PORT}`);
     console.log(`POST to http://${HOST}:${PORT}/api/jobs to enqueue a production upload job`);
     if (DATABASE_URL) {

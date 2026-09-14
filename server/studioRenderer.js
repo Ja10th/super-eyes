@@ -234,8 +234,9 @@ export async function renderStudioSession(job, onProgress = () => {}) {
   // Render the simple eye-training scene at 1080p, then upscale the final
   // encode to true 4K. This keeps the output dimensions 3840x2160 while
   // avoiding a 4x canvas and memory cost for every frame.
-  const renderWidth = 1920;
-  const renderHeight = 1080;
+  const freeProfile = process.env.RENDER_PROFILE === 'free';
+  const renderWidth = freeProfile ? 1280 : 1920;
+  const renderHeight = freeProfile ? 720 : 1080;
   const width = renderWidth;
   const height = renderHeight;
   const fps = 30;
