@@ -16,7 +16,8 @@ export interface YouTubeChannelProfileFromGoogle {
 }
 
 const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID || '').trim();
-const GOOGLE_REDIRECT_URI = 'http://localhost:5173/oauth/callback';
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const GOOGLE_REDIRECT_URI = `${window.location.origin}/oauth/callback`;
 
 function base64UrlEncode(value: Uint8Array): string {
   let binary = '';
@@ -56,7 +57,7 @@ export function buildGoogleAuthUrl(codeChallenge: string): string {
 }
 
 export async function exchangeGoogleCode(code: string, codeVerifier: string): Promise<GoogleTokenExchangeResponse> {
-  const response = await fetch('/api/google/exchange', {
+  const response = await fetch(`${API_BASE_URL}/api/google/exchange`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({

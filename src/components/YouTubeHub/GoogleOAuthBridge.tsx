@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
 
+const API_BASE_URL = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const GOOGLE_REDIRECT_URI = `${window.location.origin}/oauth/callback`;
+
 interface GoogleOAuthBridgeProps {
   onConnected: (payload: {
     channelName: string;
@@ -44,7 +47,7 @@ export const GoogleOAuthBridge: React.FC<GoogleOAuthBridgeProps> = ({
 
       const authUrl = new URL('https://accounts.google.com/o/oauth2/v2/auth');
       authUrl.searchParams.set('client_id', clientId);
-      authUrl.searchParams.set('redirect_uri', 'http://localhost:5173/oauth/callback');
+      authUrl.searchParams.set('redirect_uri', GOOGLE_REDIRECT_URI);
       authUrl.searchParams.set('response_type', 'code');
       authUrl.searchParams.set('scope', 'openid email profile https://www.googleapis.com/auth/youtube.readonly');
       authUrl.searchParams.set('access_type', 'offline');
@@ -65,13 +68,13 @@ export const GoogleOAuthBridge: React.FC<GoogleOAuthBridgeProps> = ({
           throw new Error('Missing PKCE verifier');
         }
 
-        const response = await fetch('/api/google/exchange', {
+        const response = await fetch(`${API_BASE_URL}/api/google/exchange`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             code: oauthCode,
             codeVerifier: verifier,
-            redirectUri: 'http://localhost:5173/oauth/callback',
+            redirectUri: GOOGLE_REDIRECT_URI,
           }),
         });
 

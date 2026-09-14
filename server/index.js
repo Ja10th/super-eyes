@@ -8,7 +8,7 @@ import crypto from 'node:crypto';
 import dotenv from 'dotenv';
 import { google } from 'googleapis';
 import formidable from 'formidable';
-import { spawn } from 'child_process';
+import { spawn, execFile } from 'child_process';
 import pg from 'pg';
 import { renderStudioSession } from './studioRenderer.js';
 import { createCanvas } from '@napi-rs/canvas';
@@ -828,6 +828,75 @@ const server = http.createServer(async (req, res) => {
     }
     res.writeHead(200, { 'Content-Type': 'audio/mpeg', 'Cache-Control': 'public, max-age=86400' });
     createReadStream(filePath).pipe(res);
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/google/exchange') {
+    try {
+      const payload = await parseJsonBody(req);
+      const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
+      const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
+      if (!clientId || !clientSecret || !payload.code || !payload.codeVerifier || !payload.redirectUri) {
+        throw new Error('Google OAuth environment or PKCE values are missing.');
+      }
+      const params = new URLSearchParams({
+        code: payload.code,
+        client_id: clientId,
+        client_secret: clientSecret,
+        redirect_uri: payload.redirectUri,
+        grant_type: 'authorization_code',
+        code_verifier: payload.codeVerifier,
+      });
+      const tokenResponse = await fetch('https://oauth2.googleapis.com/token', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+      const tokens = await tokenResponse.json();
+      if (!tokenResponse.ok) throw new Error(tokens.error_description || tokens.error || 'Google token exchange failed.');
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: true, tokens }));
+    } catch (error) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/api/youtube/verify') {
+    const query = url.searchParams.get('query')?.trim() || '';
+    const apiKey = url.searchParams.get('apiKey')?.trim() || '';
+    if (!query) {
+      res.writeHead(400, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: 'Query parameter required.' }));
+      return;
+    }
+    execFile('python3', [path.join(__dirname, '..', 'scripts', 'verify_youtube.py'), query, apiKey], (error, stdout) => {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      if (error) {
+        res.end(JSON.stringify({ success: false, error: error.message }));
+        return;
+      }
+      res.end(stdout.trim() || JSON.stringify({ success: false, error: 'Channel verification returned no result.' }));
+    });
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/webhook/test') {
+    try {
+      const payload = await parseJsonBody(req);
+      if (!payload.webhookUrl || !String(payload.webhookUrl).startsWith('http')) throw new Error('Valid HTTP(S) webhook URL required.');
+      const response = await fetch(payload.webhookUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ event: 'youtube.test.ping', channel: payload.channelName || 'Test Channel', timestamp: new Date().toISOString(), status: 'active' }),
+      });
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: response.ok, status: response.status, message: `Webhook responded with HTTP ${response.status}${response.ok ? ' OK' : ''}.` }));
+    } catch (error) {
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }));
+    }
     return;
   }
 
