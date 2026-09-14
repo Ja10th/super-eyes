@@ -680,8 +680,10 @@ export class AutomationService {
       timestamp: new Date().toISOString(),
     };
 
-    const webhookUrl = channel?.autoUploadWebhook && channel.autoUploadWebhook.startsWith('http')
-      ? channel.autoUploadWebhook
+    const configuredWebhook = channel?.autoUploadWebhook?.trim() || '';
+    const isLocalWebhook = /^(https?:\/\/)?(localhost|127\.0\.0\.1)(:\d+)?\b/i.test(configuredWebhook);
+    const webhookUrl = configuredWebhook.startsWith('http') && !isLocalWebhook
+      ? configuredWebhook
       : `${API_BASE_URL}/api/jobs`;
 
     try {
