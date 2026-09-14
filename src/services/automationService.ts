@@ -612,7 +612,11 @@ export class AutomationService {
 
         const nextProgress = typeof matchingJob.progress === 'number' ? matchingJob.progress : schedule.renderProgress ?? 0;
         const filePath = typeof matchingJob?.filePath === 'string' ? matchingJob.filePath : typeof matchingJob?.file_path === 'string' ? matchingJob.file_path : null;
-        const previewUrl = filePath ? `${API_BASE_URL}/api/rendered/${encodeURIComponent(filePath.split('/').pop() || 'render.mp4')}` : undefined;
+        const previewUrl = filePath
+          ? (/^https?:\/\//i.test(filePath)
+            ? filePath
+            : `${API_BASE_URL}/api/rendered/${encodeURIComponent(filePath.split('/').pop() || 'render.mp4')}`)
+          : undefined;
 
         if (
           schedule.status !== nextStatus ||
