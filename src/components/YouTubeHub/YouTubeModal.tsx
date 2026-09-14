@@ -50,6 +50,32 @@ export const YouTubeModal: React.FC<YouTubeModalProps> = ({
   const [webhookMsg, setWebhookMsg] = useState('');
   const [googleAuthStatus, setGoogleAuthStatus] = useState<'idle' | 'connecting' | 'connected'>('idle');
 
+  React.useEffect(() => {
+    if (!isOpen) return;
+    setName(channel?.name || '');
+    setHandle(channel?.channelHandle || '');
+    setHandleInput(channel?.channelHandle || '');
+    setChannelId(channel?.youtubeChannelId || '');
+    setApiKey(channel?.apiKey || '');
+    setAuthProvider(channel?.authProvider || 'manual');
+    setAvatarUrl(channel?.avatarUrl || '');
+    setSubscriberCount(channel?.subscriberCount || '');
+    setBgTheme(channel?.backgroundTheme || 'slate_zen');
+    setBallColor(channel?.ballColor || '#ffffff');
+    setBallSize(channel?.ballSize || 38);
+    setIntroCaption(
+      channel?.introCaption && !isLegacyIntroCaption(channel.introCaption)
+        ? channel.introCaption
+        : getRandomIntroCaption()
+    );
+    setPostsPerDay(channel?.postsPerDay || 2);
+    setPostingHoursStr(channel?.postingHours.join(', ') || '08:00, 18:00');
+    setWebhookUrl(channel?.autoUploadWebhook || '');
+    setVerifyState(channel?.isConnected ? 'success' : 'idle');
+    setVerifyError('');
+    setGoogleAuthStatus(channel?.isConnected ? 'connected' : 'idle');
+  }, [channel, isOpen]);
+
   const [handleInput, setHandleInput] = useState(channel?.channelHandle || '');
 
   React.useEffect(() => {
@@ -169,11 +195,11 @@ export const YouTubeModal: React.FC<YouTubeModalProps> = ({
 
     try {
       const verifier = crypto.getRandomValues(new Uint8Array(32)).reduce((acc, byte) => acc + byte.toString(16).padStart(2, '0'), '');
-      const challenge = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)).then((buf) =>
-        Array.from(new Uint8Array(buf))
-          .map((b) => b.toString(16).padStart(2, '0'))
-          .join('')
-      );
+      const challenge = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(verifier)).then((buf) => {
+        let binary = '';
+        Array.from(new Uint8Array(buf)).forEach((byte) => { binary += String.fromCharCode(byte); });
+        return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/g, '');
+      });
 
       localStorage.setItem('google_youtube_pkce', verifier);
       localStorage.setItem('google_youtube_challenge', challenge);
