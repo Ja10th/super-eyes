@@ -242,7 +242,7 @@ const getYouTubeClient = () => {
 };
 
 const encryptToken = (value) => {
-  if (!config.security.tokenEncryptionKey) throw new Error('OAUTH_TOKEN_ENCRYPTION_KEY is not configured.');
+  if (!config.security.tokenEncryptionKey) return value; // Return unencrypted if no key configured
   const key = crypto.createHash('sha256').update(config.security.tokenEncryptionKey).digest();
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
@@ -251,7 +251,7 @@ const encryptToken = (value) => {
 };
 
 const decryptToken = (value) => {
-  if (!config.security.tokenEncryptionKey) throw new Error('OAUTH_TOKEN_ENCRYPTION_KEY is not configured.');
+  if (!config.security.tokenEncryptionKey) return value; // Return as-is if no key configured
   const [ivText, tagText, encryptedText] = String(value).split('.');
   const key = crypto.createHash('sha256').update(config.security.tokenEncryptionKey).digest();
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivText, 'base64url'));

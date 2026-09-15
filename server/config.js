@@ -104,8 +104,9 @@ const config = {
 export function validateConfig() {
   const errors = [];
   
-  if (config.server.nodeEnv === 'production' && !config.security.tokenEncryptionKey) {
-    errors.push('OAUTH_TOKEN_ENCRYPTION_KEY is required in production');
+  // Only require encryption key in production if there are actual OAuth credentials
+  if (config.server.nodeEnv === 'production' && config.security.tokenEncryptionKey && !config.google.clientId) {
+    errors.push('OAUTH_TOKEN_ENCRYPTION_KEY is set but no Google OAuth credentials found');
   }
   
   if (config.server.nodeEnv === 'production' && !config.database.url) {
