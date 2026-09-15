@@ -17,7 +17,7 @@ import { YouTubeManager } from './components/YouTubeHub/YouTubeManager';
 import { ChannelManager } from './components/AutomationHub/ChannelManager';
 import { AutomationOverview } from './components/AutomationHub/AutomationOverview';
 import { LibraryView } from './components/Library/LibraryView';
-import { automationService } from './services/automationService';
+import { API_BASE_URL, automationService } from './services/automationService';
 import { audioEngine } from './services/audioService';
 import { SESSION_PRESETS, buildSessionItemsFromPreset, generateSmartRandomSession } from './data/presets';
 import { MUSIC_TRACKS } from './data/musicTracks';
@@ -61,6 +61,74 @@ export default function App() {
       window.removeEventListener('eyetraining:schedules-changed', handleScheduleUpdate);
       window.clearInterval(intervalId);
     };
+  }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const code = params.get('code');
+    const state = params.get('state');
+    if (!code || state !== 'google-youtube-auth') return;
+
+    let cancelled = false;
+    (async () => {
+      try {
+        const verifier = localStorage.getItem('google_youtube_pkce');
+        if (!verifier) throw new Error('Google sign-in expired. Please connect again.');
+
+        const response = await fetch(`${API_BASE_URL}/api/google/exchange`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            code,
+            codeVerifier: verifier,
+            redirectUri: `${window.location.origin}/oauth/callback`,
+          }),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok || !data.success || !data.channel?.channelId) {
+          throw new Error(data.error || 'Google channel connection failed.');
+        }
+
+        const connected = data.channel;
+        const channel: YouTubeChannelProfile = {
+          id: `yt_${connected.channelId}`,
+          name: connected.title || 'Connected YouTube channel',
+          channelHandle: connected.handle || '@channel',
+          youtubeChannelId: connected.channelId,
+          avatarUrl: connected.avatarUrl || '',
+          subscriberCount: connected.subscriberCount || 'connected',
+          backgroundTheme: 'slate_zen',
+          ballColor: '#ffffff',
+          ballSize: 38,
+          introCaption: 'welcome to your daily eye training session. get comfortable and keep your head still.',
+          postsPerDay: 2,
+          postingHours: ['08:00', '18:00'],
+          musicTrackId: 'zen_432hz',
+          voiceVolume: 0.95,
+          musicVolume: 0.9,
+          isConnected: true,
+          isVerified: true,
+          createdAt: new Date().toISOString(),
+        };
+
+        if (!cancelled) {
+          automationService.updateChannel(channel);
+          setChannels(automationService.getChannels());
+          setSelectedChannelId(channel.id);
+          setCurrentView('youtube');
+          localStorage.removeItem('google_youtube_pkce');
+          localStorage.removeItem('google_youtube_challenge');
+          window.history.replaceState({}, '', '/');
+        }
+      } catch (error) {
+        if (!cancelled) {
+          window.history.replaceState({}, '', '/');
+          window.alert(error instanceof Error ? error.message : String(error));
+        }
+      }
+    })();
+
+    return () => { cancelled = true; };
   }, []);
 
   const FALLBACK_CHANNEL = {
