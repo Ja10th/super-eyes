@@ -332,11 +332,11 @@ export async function renderStudioSession(job, onProgress = () => {}) {
   }
   const inputs = ['-i', silentPath, '-stream_loop', '-1', '-i', musicPath];
   voices.forEach((voice) => inputs.push('-i', voice.path));
-  const musicVolume = Math.max(0, Math.min(1.5, renderable(config.musicVolume, 0.9))) * 0.35;
+  const musicVolume = Math.max(0, Math.min(1.5, renderable(config.musicVolume, 0.9))) * 0.12;
   const voiceVolume = Math.max(0, Math.min(1.5, renderable(config.voiceVolume, 0.95))) * 1.35;
   const filters = [`[1:a]volume=${musicVolume},atrim=duration=${duration},asetpts=PTS-STARTPTS[m]`];
   voices.forEach((voice, index) => filters.push(`[${index + 2}:a]adelay=${Math.round(voice.start)}|${Math.round(voice.start)},volume=${voiceVolume},atrim=duration=${duration},asetpts=PTS-STARTPTS[v${index}]`));
-  filters.push(`[m]${voices.map((_, index) => `[v${index}]`).join('')}amix=inputs=${voices.length + 1}:duration=first:dropout_transition=0:normalize=0,acompressor=threshold=0.12:ratio=3:attack=20:release=250:makeup=2,loudnorm=I=-14:TP=-1.5:LRA=11[a]`);
+  filters.push(`[m]${voices.map((_, index) => `[v${index}]`).join('')}amix=inputs=${voices.length + 1}:duration=first:dropout_transition=0:normalize=0,acompressor=threshold=0.12:ratio=3:attack=20:release=250:makeup=0,loudnorm=I=-14:TP=-1.5:LRA=11[a]`);
   onProgress(88);
   await new Promise((resolve, reject) => {
     const videoArgs = is4K
