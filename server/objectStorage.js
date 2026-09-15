@@ -41,10 +41,15 @@ export async function uploadFileToObjectStorage(filePath, key, contentType) {
       overwrite: true,
       invalidate: true,
     };
-    const result = contentType.startsWith('video/')
-      ? await cloudinary.uploader.upload_large(filePath, uploadOptions)
-      : await cloudinary.uploader.upload(filePath, uploadOptions);
-    return result.secure_url;
+    try {
+      const result = contentType.startsWith('video/')
+        ? await cloudinary.uploader.upload_large(filePath, uploadOptions)
+        : await cloudinary.uploader.upload(filePath, uploadOptions);
+      return result.secure_url;
+    } catch (error) {
+      if (!client || !bucket || !publicBaseUrl) throw error;
+      console.warn(`[storage] Cloudinary upload failed for ${key}; falling back to R2: ${error instanceof Error ? error.message : JSON.stringify(error)}`);
+    }
   }
 
   if (!client || !bucket || !publicBaseUrl) return null;
