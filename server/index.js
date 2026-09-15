@@ -579,6 +579,8 @@ const generateStudioThumbnail = async (payload) => {
 
   const firstExercise = payload?.sessionConfig?.items?.[0]?.exerciseId || 'infinity';
   const ballColor = payload?.sessionConfig?.ballColor || '#ffffff';
+  const thumbnailSeed = String(payload?.video?.id || payload?.id || payload?.title || firstExercise);
+  const thumbnailPhase = (parseInt(crypto.createHash('md5').update(thumbnailSeed).digest('hex').slice(0, 8), 16) % 800) / 100;
 
   // Draw exercise pattern based on first exercise
   const cx = width / 2;
@@ -597,7 +599,7 @@ const generateStudioThumbnail = async (payload) => {
     const steps = 60;
     
     for (let i = 0; i <= steps; i++) {
-      const t = (i / steps) * 8; // Show 8 seconds of movement
+      const t = (i / steps) * 8 + thumbnailPhase; // Vary the captured phase per video
       let x, y;
       
       switch (exerciseId) {
@@ -727,7 +729,7 @@ const generateStudioThumbnail = async (payload) => {
   
   // Draw current position ball
   const currentPos = (() => {
-    const t = 2; // Show position at 2 seconds
+    const t = 2 + thumbnailPhase; // Capture a distinct deterministic position per video
     const rx_scaled = width * 0.32;
     const ry_scaled = height * 0.28;
     
