@@ -802,7 +802,7 @@ const uploadToYouTube = async (payload) => {
           categoryId: '28',
         },
         status: {
-          privacyStatus: 'private',
+          privacyStatus: 'public',
         },
       },
       media: {
