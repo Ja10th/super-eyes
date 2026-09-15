@@ -19,7 +19,7 @@ export const AutomationOverview: React.FC<AutomationOverviewProps> = ({ channels
   const generate = async (channel: YouTubeChannelProfile) => {
     setGenerating(channel.id);
     setFeedback(null);
-    const added = automationService.generateAutoSchedule(channel, 7);
+    const added = automationService.generateAutoSchedule(channel, 1);
     const existingUnqueued = automationService.getSchedules().filter((post) =>
       post.channelId === channel.id && post.status === 'scheduled' && !post.backendJobId
     );
@@ -53,14 +53,14 @@ export const AutomationOverview: React.FC<AutomationOverviewProps> = ({ channels
 
       <section className="aiv2-planner-panel">
         <div className="flex items-start justify-between gap-4">
-          <div><div className="aiv2-kicker">planner / seven day horizon</div><h2>What should run next?</h2><p>Automation creates unique sessions from each channel’s visual style, exercise mix, music, and posting hours. Rendering happens in the worker; watching happens in Library.</p></div>
+          <div><div className="aiv2-kicker">planner / next-day batch</div><h2>What should run next?</h2><p>Automation creates the next day’s unique sessions. GitHub Actions refreshes the batch daily, while the render worker processes the queue.</p></div>
           <CalendarClock className="w-7 h-7 shrink-0 text-[#ff2d95]" />
         </div>
         <div className="aiv2-channel-list">
           {channels.length === 0 ? <div className="aiv2-empty-inline">Connect a channel first to generate an automated schedule.</div> : channels.map((channel) => (
             <div key={channel.id} className="aiv2-channel-row">
               <div><strong>{channel.name}</strong><span><Clock3 className="w-3 h-3" /> {channel.postingHours.join(' · ')} · {channel.postsPerDay} posts/day</span></div>
-              <button onClick={() => generate(channel)} disabled={generating === channel.id} className="aiv2-small-button">{generating === channel.id ? 'generating…' : 'generate 7 days →'}</button>
+              <button onClick={() => generate(channel)} disabled={generating === channel.id} className="aiv2-small-button">{generating === channel.id ? 'generating…' : 'generate next day →'}</button>
             </div>
           ))}
         </div>

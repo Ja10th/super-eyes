@@ -707,6 +707,90 @@ const enqueueJob = async (payload) => {
   return job;
 };
 
+const buildDailySession = (durationMinutes, dateKey, slotIndex) => {
+  const exerciseSets = [
+    ['horizontal', 'diamond', 'vertical', 'rest_blink', 'circular', 'zigzag', 'infinity'],
+    ['butterfly', 'diagonal', 'hexagon', 'rest_blink', 'triangle', 'figure_s', 'near_far'],
+    ['box', 'pendulum', 'cross_jump', 'rest_blink', 'hourglass', 'spiral', 'peripheral'],
+  ];
+  const exerciseIds = exerciseSets[(Number(dateKey.slice(-2)) + slotIndex) % exerciseSets.length];
+  const motionSeconds = Math.max(8, Math.floor(((durationMinutes * 60) - 4.5 - exerciseIds.length * 5) / exerciseIds.length));
+  const items = exerciseIds.map((exerciseId, index) => ({
+    id: `daily_${dateKey}_${slotIndex}_${index}`,
+    exerciseId,
+    instructionSeconds: 5,
+    motionSeconds,
+  }));
+  return {
+    channelId: 'daily',
+    title: `Daily Visual Training — ${exerciseIds.filter((id) => id !== 'rest_blink').slice(0, 2).map((id) => id.replace(/_/g, ' ')).join(' & ')} | ${durationMinutes}-Minute Session`,
+    introCaption: 'welcome to your daily eye training session. get comfortable and keep your head still.',
+    introDurationSeconds: 4.5,
+    items,
+    backgroundTheme: 'slate_zen',
+    ballColor: '#ffffff',
+    ballSize: 38,
+    musicTrackId: 'zen_432hz',
+    voiceVolume: 0.95,
+    musicVolume: 0.9,
+    resolution: '4k',
+  };
+};
+
+const scheduleNextDailyBatch = async () => {
+  await ensureJobsStore();
+  if (!dbPool) throw new Error('Daily scheduler requires DATABASE_URL.');
+
+  const { rows: connections } = await dbPool.query(
+    'SELECT channel_id, channel_name, channel_handle FROM youtube_connections ORDER BY updated_at DESC'
+  );
+  if (connections.length === 0) return { created: 0, skipped: 0, channels: 0 };
+
+  const parsedHours = String(process.env.DAILY_POSTING_HOURS || '08:00,18:00')
+    .split(',')
+    .map((value) => value.trim())
+    .filter((value) => /^\d{2}:\d{2}$/.test(value));
+  const postingHours = parsedHours.length > 0 ? parsedHours : ['08:00', '18:00'];
+  const daysAhead = Math.max(0, Number(process.env.DAILY_SCHEDULE_DAYS_AHEAD || 1));
+  const target = new Date();
+  target.setUTCDate(target.getUTCDate() + daysAhead);
+  const dateKey = target.toISOString().slice(0, 10);
+  const existing = await loadJobs();
+  const existingKeys = new Set(existing.map((job) => job.payload?.queueKey).filter(Boolean));
+  let created = 0;
+  let skipped = 0;
+
+  for (const connection of connections) {
+    for (let slotIndex = 0; slotIndex < postingHours.length; slotIndex += 1) {
+      const scheduledTime = postingHours[slotIndex];
+      const queueKey = `daily_${connection.channel_id}_${dateKey}_${scheduledTime.replace(':', '')}`;
+      if (existingKeys.has(queueKey)) {
+        skipped += 1;
+        continue;
+      }
+
+      const durationMinutes = [7, 8, 10][(slotIndex + Number(dateKey.slice(-2))) % 3];
+      const sessionConfig = buildDailySession(durationMinutes, dateKey, slotIndex);
+      sessionConfig.channelId = connection.channel_id;
+      sessionConfig.title = `${connection.channel_name || 'Daily Visual Training'} — ${sessionConfig.title.replace('Daily Visual Training — ', '')}`;
+      await enqueueJob({
+        event: 'youtube.video.upload',
+        queueKey,
+        title: sessionConfig.title,
+        description: `A guided ${durationMinutes}-minute visual training session from ${connection.channel_name || 'Super Eyes'}. Follow the moving target smoothly and keep your head still through a calm sequence of tracking, fixation, and coordination exercises. For general practice only; stop if you experience discomfort.`,
+        tags: ['eye training', 'visual training', 'smooth pursuit', 'eye exercises', 'daily eye workout', 'super eyes'],
+        channel: { id: connection.channel_id, name: connection.channel_name, handle: connection.channel_handle, youtubeChannelId: connection.channel_id },
+        video: { id: queueKey, title: sessionConfig.title, scheduledDate: dateKey, scheduledTime, durationMinutes, durationSeconds: durationMinutes * 60, resolution: '4k', sessionConfig },
+        sessionConfig,
+        durationSeconds: durationMinutes * 60,
+      });
+      existingKeys.add(queueKey);
+      created += 1;
+    }
+  }
+  return { created, skipped, channels: connections.length, date: dateKey };
+};
+
 const updateJobStatus = async (jobId, status, extra = {}) => {
   const jobs = await loadJobs();
   const idx = jobs.findIndex((job) => job.id === jobId);
@@ -1133,7 +1217,16 @@ server.on('error', (error) => {
   process.exitCode = 1;
 });
 
-if (process.env.WORKER_ONLY === 'true') {
+if (process.env.SCHEDULER_ONLY === 'true') {
+  scheduleNextDailyBatch().then((result) => {
+    console.log(`[scheduler] daily batch complete: ${JSON.stringify(result)}`);
+  }).catch((error) => {
+    console.error('[scheduler] failed:', error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  }).finally(() => {
+    if (dbPool) dbPool.end();
+  });
+} else if (process.env.WORKER_ONLY === 'true') {
   runWorkerOnce().then(() => {
     console.log('[worker] completed one due-job pass');
   }).catch((error) => {

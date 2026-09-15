@@ -3,6 +3,7 @@ name: Render and publish due videos
 on:
   schedule:
     - cron: '*/5 * * * *'
+    - cron: '5 0 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -48,4 +49,32 @@ jobs:
         run: npm install --include=optional
 
       - name: Process one due queue pass
+        run: node server/index.js
+
+  scheduler:
+    if: github.event_name == 'workflow_dispatch' || github.event.schedule == '5 0 * * *'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    env:
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      OAUTH_TOKEN_ENCRYPTION_KEY: ${{ secrets.OAUTH_TOKEN_ENCRYPTION_KEY }}
+      DAILY_POSTING_HOURS: '08:00,18:00'
+      DAILY_SCHEDULE_DAYS_AHEAD: '1'
+      SCHEDULER_ONLY: 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install --include=optional
+
+      - name: Generate next daily batch
         run: node server/index.js
