@@ -25,7 +25,13 @@ export type ExerciseId =
   | 'random_drift'
   | 'figure_8_vertical'
   | 'hexagon'
-  | 'wave_horizontal';
+  | 'wave_horizontal'
+  | 'clover_loop'
+  | 'orbit_cross'
+  | 'sawtooth_rise'
+  | 'pulse_square'
+  | 'double_helix'
+  | 'corner_sweep';
 export interface ExerciseDefinition {
   id: ExerciseId;
   name: string;
@@ -99,6 +105,8 @@ export interface YouTubeChannelProfile {
   isVerified?: boolean;
   backgroundTheme: BackgroundThemeId;
   ballColor: string;
+  ballRotationEnabled?: boolean;
+  ballRotation?: string[];
   ballSize: number;
   introCaption: string;
   postsPerDay: number;
@@ -125,12 +133,15 @@ export interface ExerciseSessionItem {
   exerciseId: ExerciseId;
   instructionSeconds: number;
   motionSeconds: number;
+  customName?: string;
+  customCaption?: string;
 }
 export type VideoResolution = '4k' | '1080p';
 export interface VideoSessionConfig {
   channelId: string;
   title: string;
   introCaption: string;
+  introCaptionAudioPath?: string;
   introDurationSeconds: number;
   items: ExerciseSessionItem[];
   backgroundTheme: BackgroundThemeId;

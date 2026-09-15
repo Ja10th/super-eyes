@@ -1,8 +1,9 @@
 import { YouTubeChannelProfile, ScheduledPost, VideoSessionConfig, AutomationConfig } from '../types';
-import { DEFAULT_YOUTUBE_CHANNELS } from '../data/defaultChannels';
+import { DEFAULT_YOUTUBE_CHANNELS, getRotatingBallColor } from '../data/defaultChannels';
 import { SESSION_PRESETS, buildSessionItemsFromPreset, generateSmartRandomSession } from '../data/presets';
 import { EXERCISE_DEFINITIONS } from '../data/exercises';
 import { audioEngine } from './audioService';
+import { getIntroCaption, getIntroCaptionVoicePath } from '../data/introCaptions';
 
 const CHANNELS_KEY = 'eye_platform_yt_channels_v3';
 const SCHEDULES_KEY = 'eye_platform_yt_schedules_v5';
@@ -352,11 +353,12 @@ export class AutomationService {
         const sessionConfig: VideoSessionConfig = {
           channelId: channel.id,
           title: postTitle,
-          introCaption: channel.introCaption,
+          introCaption: getIntroCaption(dayOffset * postingHours.length + slotIdx),
+          introCaptionAudioPath: getIntroCaptionVoicePath(dayOffset * postingHours.length + slotIdx),
           introDurationSeconds: 4.5,
           items,
           backgroundTheme: channel.backgroundTheme,
-          ballColor: channel.ballColor,
+          ballColor: getRotatingBallColor(channel, dayOffset * postingHours.length + slotIdx),
           ballSize: channel.ballSize,
           musicTrackId: channel.musicTrackId,
           voiceVolume: channel.voiceVolume,
@@ -667,6 +669,12 @@ export class AutomationService {
     const generatedMeta = this.buildVideoMeta(metadataChannel, post.title, post.durationMinutes, post.sessionConfig.items);
     const description = generatedMeta.description;
     const tags = generatedMeta.tags;
+    const introIndex = Array.from(post.id || '').reduce((sum, character) => sum + character.charCodeAt(0), 0);
+    const sessionConfig = {
+      ...post.sessionConfig,
+      introCaption: getIntroCaption(introIndex),
+      introCaptionAudioPath: getIntroCaptionVoicePath(introIndex),
+    };
 
     const payload: Record<string, any> = {
       event: 'youtube.video.upload',
@@ -689,7 +697,7 @@ export class AutomationService {
         sourceUrl: post.previewUrl || undefined,
         forcePostNow,
       },
-      sessionConfig: post.sessionConfig,
+      sessionConfig,
       timestamp: new Date().toISOString(),
     };
 

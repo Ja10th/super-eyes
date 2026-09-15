@@ -812,6 +812,112 @@ pendulum: {
       return points;
     },
   },
+  clover_loop: {
+    id: 'clover_loop',
+    name: 'clover loop',
+    shortTitle: 'clover loop',
+    description: 'four-lobed looping path that blends circular pursuit with directional changes.',
+    captionText: 'clover loop. trace each rounded leaf with your eyes and keep your head still.',
+    voiceAudioPath: '/audio/voice/clover_loop.mp3',
+    instructionDurationSeconds: 4.5,
+    recommendedMotionSeconds: 50,
+    calculatePosition: (t, _progress, width, height) => {
+      const a = t * Math.PI * 0.28;
+      return { x: width / 2 + Math.sin(a) * width * 0.34, y: height / 2 + Math.sin(a * 2) * height * 0.24 };
+    },
+    getTrajectoryPath: (width, height) => [...Array(81)].map((_, i) => {
+      const a = (i / 80) * Math.PI * 2;
+      return { x: width / 2 + Math.sin(a) * width * 0.34, y: height / 2 + Math.sin(a * 2) * height * 0.24 };
+    }),
+  },
+  orbit_cross: {
+    id: 'orbit_cross',
+    name: 'orbit cross',
+    shortTitle: 'orbit cross',
+    description: 'an orbit that alternates between horizontal and vertical emphasis.',
+    captionText: 'orbit cross. follow the wide turn, then the tall turn, without moving your head.',
+    voiceAudioPath: '/audio/voice/orbit_cross.mp3',
+    instructionDurationSeconds: 4.5,
+    recommendedMotionSeconds: 48,
+    calculatePosition: (t, _progress, width, height) => {
+      const a = t * Math.PI * 0.25;
+      const pinch = 0.72 + 0.28 * Math.abs(Math.sin(a * 2));
+      return { x: width / 2 + Math.cos(a) * width * 0.37 * pinch, y: height / 2 + Math.sin(a) * height * 0.33 * pinch };
+    },
+    getTrajectoryPath: (width, height) => [...Array(81)].map((_, i) => {
+      const a = (i / 80) * Math.PI * 2;
+      const pinch = 0.72 + 0.28 * Math.abs(Math.sin(a * 2));
+      return { x: width / 2 + Math.cos(a) * width * 0.37 * pinch, y: height / 2 + Math.sin(a) * height * 0.33 * pinch };
+    }),
+  },
+  sawtooth_rise: {
+    id: 'sawtooth_rise',
+    name: 'sawtooth rise',
+    shortTitle: 'sawtooth rise',
+    description: 'smooth diagonal climbs followed by controlled resets across the field of view.',
+    captionText: 'sawtooth rise. track each diagonal climb, then reset softly to the starting side.',
+    voiceAudioPath: '/audio/voice/sawtooth_rise.mp3',
+    instructionDurationSeconds: 4,
+    recommendedMotionSeconds: 46,
+    calculatePosition: (t, _progress, width, height) => {
+      const phase = (t % 6) / 6;
+      return { x: width * 0.14 + phase * width * 0.72, y: height * 0.82 - phase * height * 0.64 };
+    },
+    getTrajectoryPath: (width, height) => [{ x: width * 0.14, y: height * 0.82 }, { x: width * 0.86, y: height * 0.18 }, { x: width * 0.14, y: height * 0.82 }],
+  },
+  pulse_square: {
+    id: 'pulse_square',
+    name: 'pulse square',
+    shortTitle: 'pulse square',
+    description: 'square tracking with a brief center pulse at every corner.',
+    captionText: 'pulse square. follow each side and pause your gaze briefly at every corner.',
+    voiceAudioPath: '/audio/voice/pulse_square.mp3',
+    instructionDurationSeconds: 4,
+    recommendedMotionSeconds: 48,
+    calculatePosition: (t, _progress, width, height) => {
+      const points = [{ x: width * 0.18, y: height * 0.18 }, { x: width * 0.82, y: height * 0.18 }, { x: width * 0.82, y: height * 0.82 }, { x: width * 0.18, y: height * 0.82 }, { x: width * 0.18, y: height * 0.18 }];
+      const p = (t % 8) / 2;
+      const i = Math.floor(p); const f = p - i;
+      return { x: points[i].x + (points[i + 1].x - points[i].x) * f, y: points[i].y + (points[i + 1].y - points[i].y) * f };
+    },
+    getTrajectoryPath: (width, height) => [{ x: width * 0.18, y: height * 0.18 }, { x: width * 0.82, y: height * 0.18 }, { x: width * 0.82, y: height * 0.82 }, { x: width * 0.18, y: height * 0.82 }, { x: width * 0.18, y: height * 0.18 }],
+  },
+  double_helix: {
+    id: 'double_helix',
+    name: 'double helix',
+    shortTitle: 'double helix',
+    description: 'two crossing waves that train smooth diagonal coordination.',
+    captionText: 'double helix. follow the crossing wave from side to side at an easy pace.',
+    voiceAudioPath: '/audio/voice/double_helix.mp3',
+    instructionDurationSeconds: 4.5,
+    recommendedMotionSeconds: 50,
+    calculatePosition: (t, _progress, width, height) => {
+      const a = t * Math.PI * 0.24;
+      return { x: width / 2 + Math.sin(a) * width * 0.38, y: height / 2 + Math.sin(a * 2 + Math.PI / 2) * height * 0.28 };
+    },
+    getTrajectoryPath: (width, height) => [...Array(81)].map((_, i) => {
+      const a = (i / 80) * Math.PI * 2;
+      return { x: width / 2 + Math.sin(a) * width * 0.38, y: height / 2 + Math.sin(a * 2 + Math.PI / 2) * height * 0.28 };
+    }),
+  },
+  corner_sweep: {
+    id: 'corner_sweep',
+    name: 'corner sweep',
+    shortTitle: 'corner sweep',
+    description: 'a continuous rounded sweep connecting all four corners.',
+    captionText: 'corner sweep. let your gaze travel through all four corners in one smooth loop.',
+    voiceAudioPath: '/audio/voice/corner_sweep.mp3',
+    instructionDurationSeconds: 4,
+    recommendedMotionSeconds: 48,
+    calculatePosition: (t, _progress, width, height) => {
+      const a = t * Math.PI * 0.22;
+      return { x: width / 2 + Math.sin(a) * width * 0.38, y: height / 2 + Math.sin(a * 0.5) * height * 0.34 };
+    },
+    getTrajectoryPath: (width, height) => [...Array(81)].map((_, i) => {
+      const a = (i / 80) * Math.PI * 2;
+      return { x: width / 2 + Math.sin(a) * width * 0.38, y: height / 2 + Math.sin(a * 0.5) * height * 0.34 };
+    }),
+  },
 };
 
 export const ALL_EXERCISES = Object.values(EXERCISE_DEFINITIONS);

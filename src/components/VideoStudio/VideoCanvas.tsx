@@ -140,7 +140,7 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
           currentItem: item,
           isInstruction,
           motionElapsed: isInstruction ? 0 : itemElapsed - item.instructionSeconds,
-          caption: exDef?.captionText || item.exerciseId,
+          caption: item.customCaption || exDef?.captionText || item.exerciseId,
           captionOpacity,
         };
       }
@@ -202,7 +202,7 @@ export const VideoCanvas: React.FC<VideoCanvasProps> = ({
             hasPlayedItemVoice.current[idx] = true;
             const exDef = EXERCISE_DEFINITIONS[state.currentItem.exerciseId];
             if (exDef) {
-              audioEngine.playVoice(exDef.voiceAudioPath, undefined, exDef.captionText);
+              audioEngine.playVoice(exDef.voiceAudioPath, undefined, state.currentItem.customCaption || exDef.captionText);
             }
           }
         }

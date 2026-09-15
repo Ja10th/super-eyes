@@ -27,6 +27,7 @@ export const ChannelModal: React.FC<ChannelModalProps> = ({
     channel?.ballStyle || 'neon_orb'
   );
   const [ballColor, setBallColor] = useState(channel?.ballColor || '#38bdf8');
+  const [ballRotationEnabled, setBallRotationEnabled] = useState(channel?.ballRotationEnabled !== false);
   const [ballGlowColor, setBallGlowColor] = useState(
     channel?.ballGlowColor || '#0284c7'
   );
@@ -59,6 +60,8 @@ const handleSubmit = (e: React.FormEvent) => {
       backgroundTheme: bgTheme,
       ballStyle,
       ballColor,
+      ballRotationEnabled,
+      ballRotation: channel?.ballRotation,
       ballGlowColor,
       ballSize,
       trailLength,
@@ -233,6 +236,15 @@ const handleSubmit = (e: React.FormEvent) => {
                 />
               </div>
             </div>
+            <label className="flex items-center gap-2 text-xs text-slate-300">
+              <input
+                type="checkbox"
+                checked={ballRotationEnabled}
+                onChange={(e) => setBallRotationEnabled(e.target.checked)}
+                className="accent-sky-400"
+              />
+              Rotate through all 6 ball colors for scheduled videos and thumbnails
+            </label>
           </div>
             {/* Automated Posting Frequency */}
           <div className="space-y-3 pt-2 border-t border-white/5">

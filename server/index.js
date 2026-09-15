@@ -665,6 +665,46 @@ const generateStudioThumbnail = async (payload) => {
           x = cx + Math.sin(t * Math.PI * 0.18) * width * 0.35;
           y = cy + Math.sin(t * Math.PI * 0.36 + Math.PI / 2) * height * 0.28;
           break;
+        case 'clover_loop': {
+          const angle = t * Math.PI * 0.28;
+          x = cx + Math.sin(angle) * width * 0.34;
+          y = cy + Math.sin(angle * 2) * height * 0.24;
+          break;
+        }
+        case 'orbit_cross': {
+          const angle = t * Math.PI * 0.25;
+          const pinch = 0.72 + 0.28 * Math.abs(Math.sin(angle * 2));
+          x = cx + Math.cos(angle) * width * 0.37 * pinch;
+          y = cy + Math.sin(angle) * height * 0.33 * pinch;
+          break;
+        }
+        case 'sawtooth_rise': {
+          const phase = (t % 6) / 6;
+          x = width * 0.14 + phase * width * 0.72;
+          y = height * 0.82 - phase * height * 0.64;
+          break;
+        }
+        case 'pulse_square': {
+          const points = [[width * 0.18, height * 0.18], [width * 0.82, height * 0.18], [width * 0.82, height * 0.82], [width * 0.18, height * 0.82], [width * 0.18, height * 0.18]];
+          const progress = (t % 8) / 2;
+          const index = Math.floor(progress);
+          const fraction = progress - index;
+          x = points[index][0] + (points[index + 1][0] - points[index][0]) * fraction;
+          y = points[index][1] + (points[index + 1][1] - points[index][1]) * fraction;
+          break;
+        }
+        case 'double_helix': {
+          const angle = t * Math.PI * 0.24;
+          x = cx + Math.sin(angle) * width * 0.38;
+          y = cy + Math.sin(angle * 2 + Math.PI / 2) * height * 0.28;
+          break;
+        }
+        case 'corner_sweep': {
+          const angle = t * Math.PI * 0.22;
+          x = cx + Math.sin(angle) * width * 0.38;
+          y = cy + Math.sin(angle * 0.5) * height * 0.34;
+          break;
+        }
         default:
           x = cx + Math.sin(t * Math.PI * 0.5) * rx;
           y = cy;
@@ -735,6 +775,34 @@ const generateStudioThumbnail = async (payload) => {
         return { x: left, y: bottom - distance + 2 * bw + bh };
       case 'figure_8':
         return { x: cx + Math.sin(t * Math.PI * 0.18) * width * 0.35, y: cy + Math.sin(t * Math.PI * 0.36 + Math.PI / 2) * height * 0.28 };
+      case 'clover_loop': {
+        const angle = t * Math.PI * 0.28;
+        return { x: cx + Math.sin(angle) * width * 0.34, y: cy + Math.sin(angle * 2) * height * 0.24 };
+      }
+      case 'orbit_cross': {
+        const angle = t * Math.PI * 0.25;
+        const pinch = 0.72 + 0.28 * Math.abs(Math.sin(angle * 2));
+        return { x: cx + Math.cos(angle) * width * 0.37 * pinch, y: cy + Math.sin(angle) * height * 0.33 * pinch };
+      }
+      case 'sawtooth_rise': {
+        const phase = (t % 6) / 6;
+        return { x: width * 0.14 + phase * width * 0.72, y: height * 0.82 - phase * height * 0.64 };
+      }
+      case 'pulse_square': {
+        const points = [[width * 0.18, height * 0.18], [width * 0.82, height * 0.18], [width * 0.82, height * 0.82], [width * 0.18, height * 0.82], [width * 0.18, height * 0.18]];
+        const progress = (t % 8) / 2;
+        const index = Math.floor(progress);
+        const fraction = progress - index;
+        return { x: points[index][0] + (points[index + 1][0] - points[index][0]) * fraction, y: points[index][1] + (points[index + 1][1] - points[index][1]) * fraction };
+      }
+      case 'double_helix': {
+        const angle = t * Math.PI * 0.24;
+        return { x: cx + Math.sin(angle) * width * 0.38, y: cy + Math.sin(angle * 2 + Math.PI / 2) * height * 0.28 };
+      }
+      case 'corner_sweep': {
+        const angle = t * Math.PI * 0.22;
+        return { x: cx + Math.sin(angle) * width * 0.38, y: cy + Math.sin(angle * 0.5) * height * 0.34 };
+      }
       default:
         return { x: cx + Math.sin(t * Math.PI * 0.5) * rx_scaled, y: cy };
     }

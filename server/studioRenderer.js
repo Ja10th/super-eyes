@@ -145,6 +145,34 @@ function position(exerciseId, elapsed, width, height) {
       return segment(points, 12);
     }
     case 'wave_horizontal': return { x: cx + Math.sin(t * Math.PI * 0.22) * width * 0.4, y: cy + Math.sin(t * Math.PI * 0.66) * height * 0.2 };
+    case 'clover_loop': {
+      const angle = t * Math.PI * 0.28;
+      return { x: cx + Math.sin(angle) * width * 0.34, y: cy + Math.sin(angle * 2) * height * 0.24 };
+    }
+    case 'orbit_cross': {
+      const angle = t * Math.PI * 0.25;
+      const pinch = 0.72 + 0.28 * Math.abs(Math.sin(angle * 2));
+      return { x: cx + Math.cos(angle) * width * 0.37 * pinch, y: cy + Math.sin(angle) * height * 0.33 * pinch };
+    }
+    case 'sawtooth_rise': {
+      const phase = (t % 6) / 6;
+      return { x: width * 0.14 + phase * width * 0.72, y: height * 0.82 - phase * height * 0.64 };
+    }
+    case 'pulse_square': {
+      const points = [{ x: width * 0.18, y: height * 0.18 }, { x: width * 0.82, y: height * 0.18 }, { x: width * 0.82, y: height * 0.82 }, { x: width * 0.18, y: height * 0.82 }, { x: width * 0.18, y: height * 0.18 }];
+      const progress = (t % 8) / 2;
+      const index = Math.floor(progress);
+      const fraction = progress - index;
+      return { x: points[index].x + (points[index + 1].x - points[index].x) * fraction, y: points[index].y + (points[index + 1].y - points[index].y) * fraction };
+    }
+    case 'double_helix': {
+      const angle = t * Math.PI * 0.24;
+      return { x: cx + Math.sin(angle) * width * 0.38, y: cy + Math.sin(angle * 2 + Math.PI / 2) * height * 0.28 };
+    }
+    case 'corner_sweep': {
+      const angle = t * Math.PI * 0.22;
+      return { x: cx + Math.sin(angle) * width * 0.38, y: cy + Math.sin(angle * 0.5) * height * 0.34 };
+    }
     default: return { x: cx + Math.sin(t * Math.PI * 0.5) * rx, y: cy };
   }
 }
@@ -299,7 +327,7 @@ export async function renderStudioSession(job, onProgress = () => {}) {
           }
         }
         drawBall(ctx, pos.x, pos.y, baseRadius * (pos.scale || 1), config.ballColor || '#ffffff', scale);
-        text(ctx, `exercise ${active.index + 1} of ${items.length}: ${String(active.item.exerciseId || 'exercise').replace(/_/g, ' ')}`, 56 * scale, 58 * scale, 18 * scale, 'rgba(255,255,255,0.5)');
+        text(ctx, `exercise ${active.index + 1} of ${items.length}: ${String(active.item.customName || active.item.exerciseId || 'exercise').replace(/_/g, ' ')}`, 56 * scale, 58 * scale, 18 * scale, 'rgba(255,255,255,0.5)');
       } else {
         text(ctx, 'session complete', width / 2, height / 2 - 10 * scale, 85 * scale, '#ffffff', 'center');
       }
@@ -319,7 +347,13 @@ export async function renderStudioSession(job, onProgress = () => {}) {
   const randomMusicFile = musicFiles[Math.floor(Math.random() * musicFiles.length)];
   const musicPath = path.join(musicDir, randomMusicFile);
   const voices = [{ path: path.join(root, 'public', 'audio', 'voice', 'intro_hi.mp3'), start: 0 }];
-  const introCaptionVoice = await ensureIntroCaptionVoice(root, config.introCaption);
+  const configuredIntroVoice = String(config.introCaptionAudioPath || '').replace(/^\/+/, '');
+  const configuredIntroVoicePath = configuredIntroVoice
+    ? path.join(root, 'public', configuredIntroVoice)
+    : null;
+  const introCaptionVoice = configuredIntroVoicePath && fs.existsSync(configuredIntroVoicePath)
+    ? configuredIntroVoicePath
+    : await ensureIntroCaptionVoice(root, config.introCaption);
   if (introCaptionVoice) {
     // Studio plays the caption after the initial "hi" cue.
     voices.push({ path: introCaptionVoice, start: 900 });

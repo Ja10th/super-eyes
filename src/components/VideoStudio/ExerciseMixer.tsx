@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   ExerciseSessionItem,
   ExerciseId,
@@ -10,7 +10,14 @@ import {
   ChevronDown,
   Layers,
   Shuffle,
+  Plus,
 } from 'lucide-react';
+interface CustomExerciseVariant {
+  id: string;
+  name: string;
+  caption: string;
+  exerciseId: ExerciseId;
+}
 interface ExerciseMixerProps {
   items: ExerciseSessionItem[];
   onUpdateItems: (items: ExerciseSessionItem[]) => void;
@@ -25,6 +32,22 @@ export const ExerciseMixer: React.FC<ExerciseMixerProps> = ({
   totalDurationSeconds,
   onRandomize,
 }) => {
+  const [customExercises, setCustomExercises] = useState<CustomExerciseVariant[]>([]);
+  const [customName, setCustomName] = useState('');
+  const [customCaption, setCustomCaption] = useState('');
+  const [customPattern, setCustomPattern] = useState<ExerciseId>('horizontal');
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem('eye_platform_custom_exercises_v1') || '[]');
+      if (Array.isArray(saved)) setCustomExercises(saved);
+    } catch { /* ignore malformed local exercise data */ }
+  }, []);
+
+  const saveCustomExercises = (next: CustomExerciseVariant[]) => {
+    setCustomExercises(next);
+    localStorage.setItem('eye_platform_custom_exercises_v1', JSON.stringify(next));
+  };
   const handleRemove = (index: number) => {
     if (items.length <= 1) return;
     const next = [...items];
@@ -45,7 +68,7 @@ export const ExerciseMixer: React.FC<ExerciseMixerProps> = ({
     next[index] = { ...next[index], motionSeconds };
     onUpdateItems(next);
   };
-  const handleAddExercise = (exerciseId: ExerciseId) => {
+  const handleAddExercise = (exerciseId: ExerciseId, custom?: CustomExerciseVariant) => {
     const exDef = EXERCISE_DEFINITIONS[exerciseId];
     if (!exDef) return;
     const newItem: ExerciseSessionItem = {
@@ -53,8 +76,24 @@ export const ExerciseMixer: React.FC<ExerciseMixerProps> = ({
       exerciseId,
       instructionSeconds: 5,
       motionSeconds: exDef.recommendedMotionSeconds || 45,
+      customName: custom?.name,
+      customCaption: custom?.caption,
     };
     onUpdateItems([...items, newItem]);
+  };
+  const createCustomExercise = () => {
+    const name = customName.trim();
+    if (!name) return;
+    const variant: CustomExerciseVariant = {
+      id: `custom_${Date.now()}`,
+      name,
+      caption: customCaption.trim() || `follow the ${name.toLowerCase()} pattern with your eyes only.`,
+      exerciseId: customPattern,
+    };
+    saveCustomExercises([...customExercises, variant]);
+    handleAddExercise(variant.exerciseId, variant);
+    setCustomName('');
+    setCustomCaption('');
   };
   const minutes = Math.floor(totalDurationSeconds / 60);
   const seconds = Math.floor(totalDurationSeconds % 60);
@@ -82,7 +121,8 @@ export const ExerciseMixer: React.FC<ExerciseMixerProps> = ({
              <select
             onChange={(e) => {
               if (e.target.value) {
-                handleAddExercise(e.target.value as ExerciseId);
+                const custom = customExercises.find((exercise) => exercise.id === e.target.value);
+                handleAddExercise(custom?.exerciseId || e.target.value as ExerciseId, custom);
                 e.target.value = '';
               }
             }}
@@ -97,8 +137,19 @@ export const ExerciseMixer: React.FC<ExerciseMixerProps> = ({
                 {ex.name}
               </option>
             ))}
+            {customExercises.length > 0 && <optgroup label="your custom exercises">
+              {customExercises.map((ex) => <option key={ex.id} value={ex.id} className="bg-[#0e1017] text-white">{ex.name}</option>)}
+            </optgroup>}
           </select>
         </div>
+      </div>
+      <div className="grid gap-2 rounded-xl border border-sky-500/20 bg-sky-500/5 p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+        <input value={customName} onChange={(e) => setCustomName(e.target.value)} placeholder="custom exercise name" className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white" />
+        <input value={customCaption} onChange={(e) => setCustomCaption(e.target.value)} placeholder="coaching cue (optional)" className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white" />
+        <select value={customPattern} onChange={(e) => setCustomPattern(e.target.value as ExerciseId)} className="rounded-lg border border-white/10 bg-white/5 px-2 py-1.5 text-xs text-white">
+          {ALL_EXERCISES.filter((ex) => ex.id !== 'rest_blink').map((ex) => <option key={ex.id} value={ex.id} className="bg-[#0e1017]">motion: {ex.shortTitle}</option>)}
+        </select>
+        <button type="button" onClick={createCustomExercise} disabled={!customName.trim()} className="inline-flex items-center justify-center gap-1 rounded-lg bg-sky-500 px-3 py-1.5 text-xs font-semibold text-slate-950 disabled:opacity-40"><Plus className="h-3 w-3" />save + add</button>
       </div>
       {/* Exercise Items List */}
       <div className="space-y-1.5 max-h-[320px] overflow-y-auto pr-1">
@@ -121,7 +172,7 @@ export const ExerciseMixer: React.FC<ExerciseMixerProps> = ({
                   <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-slate-200 truncate">
-                      {exDef?.name || item.exerciseId}
+                      {item.customName || exDef?.name || item.exerciseId}
                     </span>
                     {isActive && (
                       <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />

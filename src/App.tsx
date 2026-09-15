@@ -22,7 +22,7 @@ import { audioEngine } from './services/audioService';
 import { SESSION_PRESETS, buildSessionItemsFromPreset, generateSmartRandomSession } from './data/presets';
 import { MUSIC_TRACKS } from './data/musicTracks';
 import { EXERCISE_DEFINITIONS } from './data/exercises';
-import { BACKGROUND_THEMES } from './data/defaultChannels';
+import { BACKGROUND_THEMES, getRotatingBallColor } from './data/defaultChannels';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<PlatformView>('studio');
@@ -168,7 +168,7 @@ export default function App() {
     introDurationSeconds: 4.5,
     items: buildSessionItemsFromPreset(defaultPreset),
     backgroundTheme: activeChannel?.backgroundTheme || 'slate_zen',
-    ballColor: activeChannel?.ballColor || '#ffffff',
+    ballColor: getRotatingBallColor(activeChannel, 0),
     ballSize: activeChannel?.ballSize || 22,
     musicTrackId: activeChannel?.musicTrackId || 'zen_432hz',
     voiceVolume: activeChannel?.voiceVolume ?? 0.95,
@@ -178,6 +178,7 @@ export default function App() {
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState<boolean>(false);
+  const [studioBallIndex, setStudioBallIndex] = useState(0);
   const introGreetingDuration = sessionConfig.introDurationSeconds || 4.5;
   const totalDuration =
     introGreetingDuration +
@@ -237,11 +238,14 @@ export default function App() {
   const handleSelectPreset = (presetId: string) => {
     const preset = SESSION_PRESETS.find((p) => p.id === presetId);
     if (!preset) return;
+    const nextBallIndex = studioBallIndex + 1;
+    setStudioBallIndex(nextBallIndex);
     setSelectedPresetId(presetId);
     setSessionConfig((prev) => ({
       ...prev,
       title: `${activeChannel.name} • ${preset.name.toLowerCase()}`,
       items: buildSessionItemsFromPreset(preset),
+      ballColor: getRotatingBallColor(activeChannel, nextBallIndex),
     }));
     handleReset();
   };
@@ -249,11 +253,14 @@ export default function App() {
     const currentPreset = SESSION_PRESETS.find((p) => p.id === selectedPresetId);
     const targetMins = currentPreset ? currentPreset.targetDurationMinutes : 8;
     const newItems = generateSmartRandomSession(targetMins);
+    const nextBallIndex = studioBallIndex + 1;
+    setStudioBallIndex(nextBallIndex);
     setSelectedPresetId('custom');
     setSessionConfig((prev) => ({
       ...prev,
       title: `${activeChannel.name} • unique ${targetMins}m routine`,
       items: newItems,
+      ballColor: getRotatingBallColor(activeChannel, nextBallIndex),
     }));
     handleReset();
   };
@@ -261,13 +268,14 @@ export default function App() {
     const ch = channels.find((c) => c.id === channelId);
     if (!ch) return;
     setSelectedChannelId(channelId);
+    setStudioBallIndex(0);
     setSessionConfig((prev) => ({
       ...prev,
       channelId: ch.id,
       title: `${ch.name} • ${SESSION_PRESETS.find((p) => p.id === selectedPresetId)?.name.toLowerCase() || 'custom routine'}`,
       introCaption: ch.introCaption || ch.introText || 'welcome to your daily eye training session. get comfortable and keep your head still.',
       backgroundTheme: ch.backgroundTheme,
-      ballColor: ch.ballColor,
+      ballColor: getRotatingBallColor(ch, 0),
       ballSize: ch.ballSize,
       musicTrackId: ch.musicTrackId,
     }));

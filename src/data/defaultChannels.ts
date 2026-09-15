@@ -95,5 +95,13 @@ export const SOLID_BALL_COLORS = [
   { id: 'emerald_green', name: 'emerald sage', color: '#34d399' },
   { id: 'slate_pearl', name: 'slate pearl', color: '#e2e8f0' },
 ];
+
+export const BALL_ROTATION_COLORS = SOLID_BALL_COLORS.map((color) => color.color);
+
+export function getRotatingBallColor(channel: Pick<YouTubeChannelProfile, 'ballColor' | 'ballRotationEnabled' | 'ballRotation'>, index = 0): string {
+  if (channel.ballRotationEnabled === false) return channel.ballColor || BALL_ROTATION_COLORS[0];
+  const palette = channel.ballRotation?.filter(Boolean).slice(0, 6) || BALL_ROTATION_COLORS;
+  return palette[index % palette.length] || channel.ballColor || BALL_ROTATION_COLORS[0];
+}
 // Empty by default — user must connect real YouTube channels via the modal with live verification
 export const DEFAULT_YOUTUBE_CHANNELS: YouTubeChannelProfile[] = [];
