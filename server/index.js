@@ -1027,6 +1027,35 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && url.pathname === '/api/jobs/clear') {
+    try {
+      const payload = await parseJsonBody(req);
+      if (payload?.confirm !== 'CLEAR_QUEUE') {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ ok: false, message: 'Queue clear confirmation required.' }));
+        return;
+      }
+
+      let cleared = 0;
+      if (dbPool) {
+        const result = await dbPool.query('DELETE FROM jobs');
+        cleared = result.rowCount || 0;
+      } else {
+        const existing = await loadJobs();
+        cleared = existing.length;
+        await writeFile(JOBS_PATH, '[]');
+      }
+
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, cleared, message: `Cleared ${cleared} queued job${cleared === 1 ? '' : 's'}.` }));
+      return;
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, message: describeError(error) }));
+      return;
+    }
+  }
+
   if (req.method === 'GET' && url.pathname.startsWith('/api/rendered/')) {
     const fileName = decodeURIComponent(url.pathname.replace('/api/rendered/', ''));
     const safeFileName = fileName.split('/').filter(Boolean).join('/');

@@ -74,7 +74,24 @@ export default function App() {
   };
   const activeChannel =
     channels.find((c) => c.id === selectedChannelId) || channels[0] || FALLBACK_CHANNEL;
-    const defaultPreset = SESSION_PRESETS[0];
+
+  const handleClearQueue = async () => {
+    const confirmed = window.confirm(
+      'Clear the entire queue? This removes all queued, rendering, ready, and failed jobs from Neon. It does not delete YouTube videos, connected channels, or Cloudinary files.'
+    );
+    if (!confirmed) return;
+
+    try {
+      const result = await automationService.clearRemoteQueue();
+      automationService.clearSchedules();
+      setSchedules([]);
+      window.alert(`Queue cleared. ${result.cleared} job${result.cleared === 1 ? '' : 's'} removed.`);
+    } catch (error) {
+      window.alert(`Could not clear the backend queue: ${error instanceof Error ? error.message : String(error)}`);
+    }
+  };
+
+  const defaultPreset = SESSION_PRESETS[0];
   const [selectedPresetId, setSelectedPresetId] = useState<string>(defaultPreset.id);
   const [sessionConfig, setSessionConfig] = useState<VideoSessionConfig>(() => ({
     channelId: activeChannel?.id || 'channel_1',
@@ -375,7 +392,7 @@ export default function App() {
           <div className="space-y-6"><div className="aiv2-section-heading"><span>05 · visual packaging</span><h1>THUMBNAILS</h1><p>Keep every upload recognizable before it reaches the channel.</p></div><ThumbnailGenerator channels={channels} currentChannel={activeChannel} /></div>
         )}
         {currentView === 'queue' && (
-          <div className="space-y-6"><div className="aiv2-section-heading"><span>01 · rendered media</span><h1>LIBRARY</h1><p>Watch scheduled sessions, inspect the finished MP4, or override the calendar and post one immediately.</p></div><LibraryView schedules={schedules} onLoadSessionInStudio={handleLoadSessionInStudio} onPostNow={handlePostNow} /></div>
+          <div className="space-y-6"><div className="aiv2-section-heading"><span>01 · rendered media</span><h1>LIBRARY</h1><p>Watch scheduled sessions, inspect the finished MP4, or override the calendar and post one immediately.</p></div><LibraryView schedules={schedules} onLoadSessionInStudio={handleLoadSessionInStudio} onPostNow={handlePostNow} onClearQueue={handleClearQueue} /></div>
         )}
       </main>
       {/* Export Modal */}

@@ -183,6 +183,19 @@ export class AutomationService {
     }
   }
 
+  public async clearRemoteQueue(): Promise<{ cleared: number }> {
+    const response = await fetch(`${API_BASE_URL}/api/jobs/clear`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: 'CLEAR_QUEUE' }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok || !body?.ok) {
+      throw new Error(body?.message || `Queue clear failed with HTTP ${response.status}`);
+    }
+    return { cleared: Number(body.cleared || 0) };
+  }
+
   public updateScheduleStatus(id: string, status: ScheduledPost['status'], renderProgress?: number) {
     const schedules = this.getSchedules();
     const idx = schedules.findIndex((s) => s.id === id);

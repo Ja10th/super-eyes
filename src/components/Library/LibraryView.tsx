@@ -1,16 +1,17 @@
 import React, { useMemo, useState } from 'react';
-import { Calendar, Film, Play, RotateCcw, Send } from 'lucide-react';
+import { Calendar, Film, Play, RotateCcw, Send, Trash2 } from 'lucide-react';
 import { ScheduledPost } from '../../types';
 
 interface LibraryViewProps {
   schedules: ScheduledPost[];
   onLoadSessionInStudio: (post: ScheduledPost) => void;
   onPostNow: (post: ScheduledPost) => Promise<void>;
+  onClearQueue: () => Promise<void>;
 }
 
 type LibraryFilter = 'all' | 'ready' | 'scheduled' | 'published' | 'rendering' | 'failed';
 
-export const LibraryView: React.FC<LibraryViewProps> = ({ schedules, onLoadSessionInStudio, onPostNow }) => {
+export const LibraryView: React.FC<LibraryViewProps> = ({ schedules, onLoadSessionInStudio, onPostNow, onClearQueue }) => {
   const [filter, setFilter] = useState<LibraryFilter>('all');
   const [postingId, setPostingId] = useState<string | null>(null);
   const rendered = useMemo(() => schedules.filter((post) => {
@@ -31,10 +32,17 @@ export const LibraryView: React.FC<LibraryViewProps> = ({ schedules, onLoadSessi
 
       <div className="aiv2-library-toolbar">
         <div className="flex items-center gap-2"><Film className="w-4 h-4" /><span>your rendered sessions</span></div>
-        <div className="flex flex-wrap gap-2">
+        <div className="flex flex-wrap gap-2 items-center">
           {(['all', 'ready', 'scheduled', 'published', 'rendering', 'failed'] as LibraryFilter[]).map((item) => (
             <button key={item} onClick={() => setFilter(item)} className={`aiv2-filter ${filter === item ? 'is-active' : ''}`}>{item}</button>
           ))}
+          <button
+            onClick={onClearQueue}
+            className="aiv2-small-button text-red-300 border-red-400/40"
+            title="Remove all jobs from the Neon queue and clear this list"
+          >
+            <Trash2 className="w-3 h-3" /> clear queue
+          </button>
         </div>
       </div>
 
