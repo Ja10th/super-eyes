@@ -352,6 +352,7 @@ export class AutomationService {
 
         const sessionConfig: VideoSessionConfig = {
           channelId: channel.id,
+          channelName: channel.name,
           title: postTitle,
           introCaption: getIntroCaption(dayOffset * postingHours.length + slotIdx),
           introCaptionAudioPath: getIntroCaptionVoicePath(dayOffset * postingHours.length + slotIdx),
@@ -672,6 +673,7 @@ export class AutomationService {
     const introIndex = Array.from(post.id || '').reduce((sum, character) => sum + character.charCodeAt(0), 0);
     const sessionConfig = {
       ...post.sessionConfig,
+      channelName: metadataChannel.name,
       introCaption: getIntroCaption(introIndex),
       introCaptionAudioPath: getIntroCaptionVoicePath(introIndex),
     };

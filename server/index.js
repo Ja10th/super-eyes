@@ -361,6 +361,7 @@ const buildDefaultSessionConfig = (job) => {
   const title = String(job?.title || 'Eye Training Routine');
   return {
     channelId: 'default_queue_channel',
+    channelName: 'eye-training',
     title,
     introCaption: 'welcome to your daily eye training session',
     introDurationSeconds: 4.5,

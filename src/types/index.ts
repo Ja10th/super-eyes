@@ -139,6 +139,7 @@ export interface ExerciseSessionItem {
 export type VideoResolution = '4k' | '1080p';
 export interface VideoSessionConfig {
   channelId: string;
+  channelName?: string;
   title: string;
   introCaption: string;
   introCaptionAudioPath?: string;

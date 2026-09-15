@@ -163,6 +163,7 @@ export default function App() {
   const [selectedPresetId, setSelectedPresetId] = useState<string>(defaultPreset.id);
   const [sessionConfig, setSessionConfig] = useState<VideoSessionConfig>(() => ({
     channelId: activeChannel?.id || 'channel_1',
+    channelName: activeChannel?.name || 'zenvision',
     title: `${activeChannel?.name || 'zenvision'} • ${defaultPreset.name.toLowerCase()}`,
     introCaption: activeChannel?.introCaption || 'welcome to your daily eye training session. get comfortable and keep your head still.',
     introDurationSeconds: 4.5,
@@ -272,6 +273,7 @@ export default function App() {
     setSessionConfig((prev) => ({
       ...prev,
       channelId: ch.id,
+      channelName: ch.name,
       title: `${ch.name} • ${SESSION_PRESETS.find((p) => p.id === selectedPresetId)?.name.toLowerCase() || 'custom routine'}`,
       introCaption: ch.introCaption || ch.introText || 'welcome to your daily eye training session. get comfortable and keep your head still.',
       backgroundTheme: ch.backgroundTheme,

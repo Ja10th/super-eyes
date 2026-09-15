@@ -332,7 +332,8 @@ export async function renderStudioSession(job, onProgress = () => {}) {
         text(ctx, 'session complete', width / 2, height / 2 - 10 * scale, 85 * scale, '#ffffff', 'center');
       }
     }
-    text(ctx, config.channelId ? `@${String(config.channelId).toLowerCase()}` : '@eye-training', width - 32 * scale, height - 24 * scale, 14 * scale, 'rgba(255,255,255,0.32)', 'right');
+    const watermark = config.channelName || config.channelId || 'eye-training';
+    text(ctx, String(watermark), width - 32 * scale, height - 24 * scale, 14 * scale, 'rgba(255,255,255,0.32)', 'right');
     const pixels = canvas.data();
     const accepted = frameStream.write(Buffer.from(pixels.buffer, pixels.byteOffset, pixels.byteLength));
     if (!accepted) await once(frameStream, 'drain');
