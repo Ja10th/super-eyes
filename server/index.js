@@ -5,37 +5,71 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { Readable } from 'stream';
 import crypto from 'node:crypto';
-import dotenv from 'dotenv';
 import { google } from 'googleapis';
 import formidable from 'formidable';
 import { spawn, execFile } from 'child_process';
 import pg from 'pg';
 import { renderStudioSession } from './studioRenderer.js';
 import { createCanvas } from '@napi-rs/canvas';
-import { uploadFileToObjectStorage } from './objectStorage.js';
+import { uploadFileToObjectStorage, isObjectStorageConfigured } from './objectStorage.js';
+import logger from './logger.js';
+import { calculateExercisePosition } from './exerciseUtils.js';
+import config, { validateConfig } from './config.js';
 
 const { Pool } = pg;
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const PORT = Number(process.env.PORT || 3001);
-const HOST = process.env.HOST || '0.0.0.0';
-const JOBS_PATH = path.join(__dirname, 'jobs.json');
-const RENDERED_PATH = path.join(__dirname, 'rendered');
-const DATABASE_URL = process.env.DATABASE_URL || '';
-const dbPool = DATABASE_URL ? new Pool({
-  connectionString: DATABASE_URL,
-  max: 5,
-  ssl: DATABASE_URL.includes('localhost') || DATABASE_URL.includes('127.0.0.1') ? false : { rejectUnauthorized: false },
+const JOBS_PATH = path.join(__dirname, config.paths.jobs);
+const RENDERED_PATH = path.join(__dirname, config.paths.rendered);
+const dbPool = config.database.url ? new Pool({
+  connectionString: config.database.url,
+  max: config.database.poolMax,
+  ssl: config.database.ssl,
 }) : null;
-const TOKEN_ENCRYPTION_KEY = process.env.OAUTH_TOKEN_ENCRYPTION_KEY || '';
+
+// Simple rate limiting store
+const rateLimitStore = new Map();
+
+const checkRateLimit = (identifier) => {
+  const now = Date.now();
+  const record = rateLimitStore.get(identifier);
+  
+  if (!record || now - record.timestamp > config.rateLimit.windowMs) {
+    rateLimitStore.set(identifier, { count: 1, timestamp: now });
+    return true;
+  }
+  
+  if (record.count >= config.rateLimit.maxRequests) {
+    return false;
+  }
+  
+  record.count++;
+  return true;
+};
+
+const getClientIdentifier = (req) => {
+  return req.headers['x-forwarded-for'] || req.headers['x-real-ip'] || req.socket.remoteAddress || 'unknown';
+};
 
 const setCorsHeaders = (res) => {
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = res.req.headers.origin;
+  if (config.security.allowedOrigins.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
+  
+  // Security headers
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  
+  // Only set HSTS for HTTPS connections
+  if (config.security.https) {
+    res.setHeader('Strict-Transport-Security', 'max-age=31536000; includeSubDomains');
+  }
 };
 
 const describeError = (error) => {
@@ -67,6 +101,12 @@ const ensureJobsStore = async () => {
     `);
     await dbPool.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'queued'`);
     await dbPool.query(`ALTER TABLE jobs ADD COLUMN IF NOT EXISTS error TEXT`);
+    
+    // Add performance indexes for common queries
+    await dbPool.query(`CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status)`);
+    await dbPool.query(`CREATE INDEX IF NOT EXISTS idx_jobs_created_at ON jobs(created_at)`);
+    await dbPool.query(`CREATE INDEX IF NOT EXISTS idx_jobs_updated_at ON jobs(updated_at)`);
+    
     await dbPool.query(`
       CREATE TABLE IF NOT EXISTS youtube_connections (
         id TEXT PRIMARY KEY,
@@ -82,6 +122,9 @@ const ensureJobsStore = async () => {
     `);
     await dbPool.query(`ALTER TABLE youtube_connections ADD COLUMN IF NOT EXISTS client_id TEXT`);
     await dbPool.query(`ALTER TABLE youtube_connections ADD COLUMN IF NOT EXISTS client_secret TEXT`);
+    
+    // Add index for channel lookups
+    await dbPool.query(`CREATE INDEX IF NOT EXISTS idx_youtube_connections_channel_id ON youtube_connections(channel_id)`);
     return;
   }
 
@@ -190,16 +233,17 @@ const getYouTubeClientForCredentials = ({ clientId, clientSecret, redirectUri, r
 };
 
 const getYouTubeClient = () => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
-  const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-  const redirectUri = process.env.GOOGLE_REDIRECT_URI;
-  const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
-  return getYouTubeClientForCredentials({ clientId, clientSecret, redirectUri, refreshToken });
+  return getYouTubeClientForCredentials({ 
+    clientId: config.google.clientId, 
+    clientSecret: config.google.clientSecret, 
+    redirectUri: config.google.redirectUri, 
+    refreshToken: config.google.refreshToken 
+  });
 };
 
 const encryptToken = (value) => {
-  if (!TOKEN_ENCRYPTION_KEY) throw new Error('OAUTH_TOKEN_ENCRYPTION_KEY is not configured.');
-  const key = crypto.createHash('sha256').update(TOKEN_ENCRYPTION_KEY).digest();
+  if (!config.security.tokenEncryptionKey) throw new Error('OAUTH_TOKEN_ENCRYPTION_KEY is not configured.');
+  const key = crypto.createHash('sha256').update(config.security.tokenEncryptionKey).digest();
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
   const encrypted = Buffer.concat([cipher.update(value, 'utf8'), cipher.final()]);
@@ -207,9 +251,9 @@ const encryptToken = (value) => {
 };
 
 const decryptToken = (value) => {
-  if (!TOKEN_ENCRYPTION_KEY) throw new Error('OAUTH_TOKEN_ENCRYPTION_KEY is not configured.');
+  if (!config.security.tokenEncryptionKey) throw new Error('OAUTH_TOKEN_ENCRYPTION_KEY is not configured.');
   const [ivText, tagText, encryptedText] = String(value).split('.');
-  const key = crypto.createHash('sha256').update(TOKEN_ENCRYPTION_KEY).digest();
+  const key = crypto.createHash('sha256').update(config.security.tokenEncryptionKey).digest();
   const decipher = crypto.createDecipheriv('aes-256-gcm', key, Buffer.from(ivText, 'base64url'));
   decipher.setAuthTag(Buffer.from(tagText, 'base64url'));
   return Buffer.concat([decipher.update(Buffer.from(encryptedText, 'base64url')), decipher.final()]).toString('utf8');
@@ -235,7 +279,7 @@ const getYouTubeClientAsync = async () => {
       return getYouTubeClientForCredentials({
         clientId: decryptToken(row.client_id),
         clientSecret: decryptToken(row.client_secret),
-        redirectUri: process.env.GOOGLE_REDIRECT_URI || 'https://super-eyes.vercel.app/oauth/callback',
+        redirectUri: config.google.redirectUri,
         refreshToken: decryptToken(row.refresh_token),
       });
     }
@@ -595,12 +639,68 @@ const generateStudioThumbnail = async (payload) => {
   ctx.font = '700 28px Arial'; ctx.fillStyle = '#ffffff'; ctx.fillText(`${minutes} min`, 60, y + 105);
   ctx.font = '600 20px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fillText(channelName, 60, y + 145);
 
-  const cx = width * 0.73; const cy = height * 0.46;
-  ctx.beginPath(); ctx.arc(cx, cy, 112, 0, Math.PI * 2); ctx.fillStyle = ballColor; ctx.shadowColor = ballColor; ctx.shadowBlur = 50; ctx.fill(); ctx.shadowBlur = 0;
-  ctx.strokeStyle = 'rgba(255,255,255,0.28)'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 170, 0, Math.PI * 2); ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.62)'; ctx.font = '600 18px Arial'; ctx.fillText(String(firstExercise).replace(/_/g, ' '), width * 0.62, height * 0.82);
-  ctx.fillStyle = 'rgba(255,255,255,0.18)'; ctx.fillRect(0, height - 48, width, 48);
-  ctx.fillStyle = '#f8fafc'; ctx.font = '600 16px Arial'; ctx.fillText('ZEN VISION', 34, height - 18);
+  // Draw exercise pattern based on first exercise
+  const cx = width * 0.73;
+  const cy = height * 0.46;
+  const rx = width * 0.32;
+  const ry = height * 0.28;
+  
+  // Draw the exercise movement pattern
+  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([8, 8]);
+  
+  const drawExercisePattern = (exerciseId) => {
+    ctx.beginPath();
+    const points = [];
+    const steps = 60;
+    
+    for (let i = 0; i <= steps; i++) {
+      const t = (i / steps) * 8; // Show 8 seconds of movement
+      const pos = calculateExercisePosition(exerciseId, t, width, height);
+      points.push({ x: pos.x, y: pos.y });
+    }
+    
+    // Draw the path
+    if (points.length > 0) {
+      ctx.moveTo(points[0].x, points[0].y);
+      for (let i = 1; i < points.length; i++) {
+        ctx.lineTo(points[i].x, points[i].y);
+      }
+    }
+    ctx.stroke();
+  };
+  
+  drawExercisePattern(firstExercise);
+  ctx.setLineDash([]);
+  
+  // Draw current position ball
+  const currentPos = calculateExercisePosition(firstExercise, 2, width, height);
+  
+  const ballRadius = 100 * (currentPos.scale || 1);
+  ctx.beginPath(); 
+  ctx.arc(currentPos.x, currentPos.y, ballRadius, 0, Math.PI * 2); 
+  ctx.fillStyle = ballColor; 
+  ctx.shadowColor = ballColor; 
+  ctx.shadowBlur = 50; 
+  ctx.fill(); 
+  ctx.shadowBlur = 0;
+  
+  // Draw target circle
+  ctx.strokeStyle = 'rgba(255,255,255,0.28)'; 
+  ctx.lineWidth = 2; 
+  ctx.beginPath(); 
+  ctx.arc(cx, cy, 150, 0, Math.PI * 2); 
+  ctx.stroke();
+  
+  ctx.fillStyle = 'rgba(255,255,255,0.62)'; 
+  ctx.font = '600 18px Arial'; 
+  ctx.fillText(String(firstExercise).replace(/_/g, ' '), width * 0.62, height * 0.82);
+  ctx.fillStyle = 'rgba(255,255,255,0.18)'; 
+  ctx.fillRect(0, height - 48, width, 48);
+  ctx.fillStyle = '#f8fafc'; 
+  ctx.font = '600 16px Arial'; 
+  ctx.fillText('ZEN VISION', 34, height - 18);
 
   await writeFile(thumbnailPath, canvas.toBuffer('image/png'));
   return thumbnailPath;
@@ -663,12 +763,15 @@ const uploadToYouTube = async (payload) => {
           media: { body: createReadStream(thumbnailPath), mimeType: 'image/png' },
         });
         thumbnailUploaded = true;
+        logger.info('youtube', `video ${videoId} uploaded successfully with thumbnail`);
       } catch (thumbnailError) {
-        console.warn(`[youtube] video uploaded but thumbnail failed: ${thumbnailError instanceof Error ? thumbnailError.message : thumbnailError}`);
+        logger.warn('youtube', `video ${videoId} uploaded successfully but thumbnail upload failed`, { error: thumbnailError instanceof Error ? thumbnailError.message : thumbnailError });
       } finally {
         await unlink(thumbnailPath).catch(() => {});
       }
-      if (thumbnailUrl) console.log(`[storage] thumbnail stored at ${thumbnailUrl}`);
+      if (thumbnailUrl) logger.info('storage', `thumbnail stored at ${thumbnailUrl}`);
+    } else {
+      logger.info('youtube', `video ${videoId} uploaded successfully (no thumbnail)`);
     }
 
     return {
@@ -746,12 +849,8 @@ const scheduleNextDailyBatch = async () => {
   );
   if (connections.length === 0) return { created: 0, skipped: 0, channels: 0 };
 
-  const parsedHours = String(process.env.DAILY_POSTING_HOURS || '08:00,18:00')
-    .split(',')
-    .map((value) => value.trim())
-    .filter((value) => /^\d{2}:\d{2}$/.test(value));
-  const postingHours = parsedHours.length > 0 ? parsedHours : ['08:00', '18:00'];
-  const daysAhead = Math.max(0, Number(process.env.DAILY_SCHEDULE_DAYS_AHEAD || 1));
+  const postingHours = config.queue.postingHours;
+  const daysAhead = config.queue.scheduleDaysAhead;
   const target = new Date();
   target.setUTCDate(target.getUTCDate() + daysAhead);
   const dateKey = target.toISOString().slice(0, 10);
@@ -834,14 +933,14 @@ const publishScheduledJobs = async () => {
         completedAt: new Date().toISOString(),
         result,
       });
-      console.log(`[queue] scheduled post published ${job.id}`);
+      logger.info('queue', `scheduled post published ${job.id}`);
     } catch (error) {
       await updateJobStatus(job.id, 'ready', {
         progress: 100,
         stage: 'ready · upload pending',
         error: describeError(error),
       });
-      console.error(`[queue] scheduled post failed ${job.id}:`, error instanceof Error ? error.message : error);
+      logger.error('queue', `scheduled post failed ${job.id}`, { error: error instanceof Error ? error.message : error });
     }
   }
 };
@@ -856,7 +955,7 @@ const processJob = async (renderFutureJobs = true) => {
   });
   if (!job) return null;
 
-  console.log(`[queue] starting ${job.id}: ${job.title}`);
+  logger.info('queue', `starting ${job.id}: ${job.title}`);
 
   await updateJobStatus(job.id, 'rendering', { progress: 5, stage: 'starting', error: null });
 
@@ -880,14 +979,14 @@ const processJob = async (renderFutureJobs = true) => {
   let resolvedRenderSource;
   try {
     resolvedRenderSource = typeof renderSource === 'string' ? renderSource : await renderSource;
-    console.log(`[queue] render complete ${job.id}: ${resolvedRenderSource}`);
+    logger.info('queue', `render complete ${job.id}: ${resolvedRenderSource}`);
   } catch (error) {
     await updateJobStatus(job.id, 'failed', {
       progress: 0,
       stage: 'failed',
       error: describeError(error),
     });
-    console.error(`[queue] render failed ${job.id}:`, error instanceof Error ? error.message : error);
+    logger.error('queue', `render failed ${job.id}`, { error: error instanceof Error ? error.message : error });
     throw error;
   }
 
@@ -897,7 +996,7 @@ const processJob = async (renderFutureJobs = true) => {
     'video/mp4',
   );
   const persistedRenderSource = storedRenderSource || resolvedRenderSource;
-  if (storedRenderSource) console.log(`[storage] video stored at ${storedRenderSource}`);
+  if (storedRenderSource) logger.info('storage', `video stored at ${storedRenderSource}`);
 
   await updateJobStatus(job.id, 'ready', { progress: 86, stage: 'ready', filePath: persistedRenderSource });
 
@@ -908,7 +1007,7 @@ const processJob = async (renderFutureJobs = true) => {
       stage: `scheduled for ${scheduledAt.toLocaleString()}`,
       filePath: persistedRenderSource,
     });
-    console.log(`[queue] render complete; holding ${job.id} for ${scheduledAt.toISOString()}`);
+    logger.info('queue', `render complete; holding ${job.id} for ${scheduledAt.toISOString()}`);
     return { renderedOnly: true, scheduled: true, filePath: resolvedRenderSource };
   }
 
@@ -950,7 +1049,7 @@ const processJob = async (renderFutureJobs = true) => {
       filePath: persistedRenderSource,
       error: uploadError,
     });
-    console.warn(`[queue] render complete; YouTube upload pending for ${job.id}: ${uploadError}`);
+    logger.warn('queue', `YouTube upload failed for ${job.id}`, { error: uploadError });
     return { renderedOnly: true, filePath: resolvedRenderSource, uploadError };
   }
 };
@@ -964,7 +1063,7 @@ const runQueueWorker = async () => {
     await processJob();
     await publishScheduledJobs();
   } catch (error) {
-    console.error('Queue worker error:', error);
+    logger.error('queue', 'Queue worker error', { error: error instanceof Error ? error.message : error });
   } finally {
     queueWorkerBusy = false;
   }
@@ -988,11 +1087,32 @@ const runWorkerOnce = async () => {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
 
+  // Rate limiting (skip for health checks and static files)
+  if (!url.pathname.startsWith('/health') && !url.pathname.startsWith('/static')) {
+    const clientId = getClientIdentifier(req);
+    if (!checkRateLimit(clientId)) {
+      res.writeHead(429, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'Too many requests. Please try again later.' }));
+      return;
+    }
+  }
+
   setCorsHeaders(res);
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204);
     res.end();
+    return;
+  }
+
+  if (req.method === 'GET' && url.pathname === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ 
+      status: 'healthy', 
+      timestamp: new Date().toISOString(),
+      database: dbPool ? 'connected' : 'not configured',
+      storage: isObjectStorageConfigured ? 'configured' : 'not configured'
+    }));
     return;
   }
 
@@ -1012,10 +1132,30 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'POST' && url.pathname === '/api/google/exchange') {
     try {
       const payload = await parseJsonBody(req);
-      const clientId = process.env.GOOGLE_CLIENT_ID || process.env.VITE_GOOGLE_CLIENT_ID;
-      const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-      if (!clientId || !clientSecret || !payload.code || !payload.codeVerifier || !payload.redirectUri) {
-        throw new Error('Google OAuth environment or PKCE values are missing.');
+      
+      // Input validation
+      if (!payload || typeof payload !== 'object') {
+        throw new Error('Invalid request payload');
+      }
+      
+      const clientId = config.google.clientId;
+      const clientSecret = config.google.clientSecret;
+      
+      // Validate required fields
+      if (!clientId || !clientSecret) {
+        throw new Error('Google OAuth environment variables are missing');
+      }
+      
+      if (!payload.code || typeof payload.code !== 'string' || payload.code.length > 500) {
+        throw new Error('Invalid authorization code');
+      }
+      
+      if (!payload.codeVerifier || typeof payload.codeVerifier !== 'string' || payload.codeVerifier.length > 500) {
+        throw new Error('Invalid code verifier');
+      }
+      
+      if (!payload.redirectUri || typeof payload.redirectUri !== 'string' || !payload.redirectUri.startsWith('http')) {
+        throw new Error('Invalid redirect URI');
       }
       const params = new URLSearchParams({
         code: payload.code,
@@ -1163,8 +1303,14 @@ const server = http.createServer(async (req, res) => {
       const payload = contentType.includes('multipart/form-data')
         ? await handleMultipartUpload(req)
         : await parseJsonBody(req);
+      
+      // Basic payload validation
+      if (!payload || typeof payload !== 'object') {
+        throw new Error('Invalid payload');
+      }
+      
       const job = await enqueueJob(payload);
-      if (process.env.DISABLE_QUEUE_WORKER !== 'true') startQueueWorker();
+      if (!config.queue.disableWorker) startQueueWorker();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, job }));
       return;
@@ -1181,7 +1327,7 @@ const server = http.createServer(async (req, res) => {
       const contentType = req.headers['content-type'] || '';
       const payload = contentType.includes('multipart/form-data') ? await handleMultipartUpload(req) : await parseJsonBody(req);
       const job = await enqueueJob(payload);
-      if (process.env.DISABLE_QUEUE_WORKER !== 'true') startQueueWorker();
+      if (!config.queue.disableWorker) startQueueWorker();
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ ok: true, job }));
       return;
@@ -1210,43 +1356,52 @@ const server = http.createServer(async (req, res) => {
 });
 
 server.on('error', (error) => {
-  console.error(`Unable to start the server on ${HOST}:${PORT}:`, error.message);
+  logger.error('server', `Unable to start the server on ${config.server.host}:${config.server.port}`, { error: error.message });
   if (error.code === 'EADDRINUSE') {
-    console.error(`Port ${PORT} is already in use. Set PORT to another value or stop the existing process.`);
+    logger.error('server', `Port ${config.server.port} is already in use. Set PORT to another value or stop the existing process.`);
   }
   process.exitCode = 1;
 });
 
-if (process.env.SCHEDULER_ONLY === 'true') {
+// Validate configuration on startup
+try {
+  validateConfig();
+} catch (error) {
+  logger.error('config', 'Configuration validation failed', { error: error instanceof Error ? error.message : error });
+  process.exitCode = 1;
+  process.exit(1);
+}
+
+if (config.queue.schedulerOnly) {
   scheduleNextDailyBatch().then((result) => {
-    console.log(`[scheduler] daily batch complete: ${JSON.stringify(result)}`);
+    logger.info('scheduler', `daily batch complete`, { result });
   }).catch((error) => {
-    console.error('[scheduler] failed:', error instanceof Error ? error.message : error);
+    logger.error('scheduler', 'failed', { error: error instanceof Error ? error.message : error });
     process.exitCode = 1;
   }).finally(() => {
     if (dbPool) dbPool.end();
   });
-} else if (process.env.WORKER_ONLY === 'true') {
+} else if (config.queue.workerOnly) {
   runWorkerOnce().then(() => {
-    console.log('[worker] completed one due-job pass');
+    logger.info('worker', 'completed one due-job pass');
   }).catch((error) => {
-    console.error('[worker] failed:', error instanceof Error ? error.message : error);
+    logger.error('worker', 'failed', { error: error instanceof Error ? error.message : error });
     process.exitCode = 1;
   });
-} else server.listen(PORT, HOST, async () => {
+} else server.listen(config.server.port, config.server.host, async () => {
   try {
     await ensureJobsStore();
     await recoverStaleJobs();
-    if (process.env.DISABLE_QUEUE_WORKER !== 'true') startQueueWorker();
-    console.log(`Local upload webhook server running at http://${HOST}:${PORT}`);
-    console.log(`POST to http://${HOST}:${PORT}/api/jobs to enqueue a production upload job`);
-    if (DATABASE_URL) {
-      console.log('Postgres queue enabled via DATABASE_URL');
+    if (!config.queue.disableWorker) startQueueWorker();
+    logger.info('server', `Local upload webhook server running at http://${config.server.host}:${config.server.port}`);
+    logger.info('server', `POST to http://${config.server.host}:${config.server.port}/api/jobs to enqueue a production upload job`);
+    if (config.database.url) {
+      logger.info('server', 'Postgres queue enabled via DATABASE_URL');
     } else {
-      console.log('No DATABASE_URL set; using file-based fallback queue');
+      logger.info('server', 'No DATABASE_URL set; using file-based fallback queue');
     }
   } catch (error) {
-    console.error('Server startup failed while initializing the queue:', error instanceof Error ? error.message : error);
+    logger.error('server', 'Server startup failed while initializing the queue', { error: error instanceof Error ? error.message : error });
     process.exitCode = 1;
   }
 });
