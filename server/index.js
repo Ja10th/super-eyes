@@ -31,6 +31,10 @@ const dbPool = DATABASE_URL ? new Pool({
   ssl: DATABASE_URL.includes('localhost') || DATABASE_URL.includes('127.0.0.1') ? false : { rejectUnauthorized: false },
 }) : null;
 const TOKEN_ENCRYPTION_KEY = process.env.OAUTH_TOKEN_ENCRYPTION_KEY || '';
+const GITHUB_TOKEN = process.env.GITHUB_TOKEN || '';
+const GITHUB_REPOSITORY = process.env.GITHUB_REPOSITORY || 'Ja10th/super-eyes';
+const GITHUB_WORKFLOW_FILE = process.env.GITHUB_WORKFLOW_FILE || 'render-worker.yml';
+const GITHUB_WORKFLOW_REF = process.env.GITHUB_WORKFLOW_REF || 'main';
 
 const setCorsHeaders = (res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -557,54 +561,35 @@ const resolveVideoInput = async (input) => {
 const generateStudioThumbnail = async (payload) => {
   const thumbnailPath = path.join(process.cwd(), 'uploads', `thumbnail-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.png`);
   await mkdir(path.dirname(thumbnailPath), { recursive: true });
-  const width = 1280;
-  const height = 720;
+  const width = 3840;
+  const height = 2160;
+  const scale = width / 1920;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
   const theme = payload?.sessionConfig?.backgroundTheme || 'slate_zen';
   const gradients = {
-    slate_zen: ['#0f172a', '#1d4ed8'], deep_space: ['#020617', '#1e293b'],
-    clean_studio: ['#111827', '#334155'], warm_sunrise: ['#7c2d12', '#f59e0b'],
-    forest_mist: ['#052e16', '#22c55e'], cyber_amber: ['#111827', '#f59e0b'],
+    slate_zen: ['#161922', '#0d0f16', '#050608'], deep_space: ['#110f1c', '#07060d', '#020104'],
+    clean_studio: ['#0a0a0c', '#0a0a0c', '#0a0a0c'], warm_sunrise: ['#22112a', '#130a1c', '#06030a'],
+    forest_mist: ['#06382a', '#031c15', '#010a08'], cyber_amber: ['#1c1505', '#0d0a02', '#040301'],
   };
-  const [start, end] = gradients[theme] || gradients.slate_zen;
-  const gradient = ctx.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, start); gradient.addColorStop(1, end);
+  const [start, middle, end] = gradients[theme] || gradients.slate_zen;
+  const gradient = ctx.createRadialGradient(width / 2, height / 2, 30, width / 2, height / 2, width * 0.7);
+  gradient.addColorStop(0, start); gradient.addColorStop(0.7, middle); gradient.addColorStop(1, end);
   ctx.fillStyle = gradient; ctx.fillRect(0, 0, width, height);
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.42)'; ctx.fillRect(width * 0.52, 0, width * 0.48, height);
 
-  const title = String(payload?.title || payload?.video?.title || 'Daily Visual Training');
-  const duration = Number(payload?.durationSeconds || (payload?.video?.durationMinutes || 7) * 60);
-  const minutes = Math.max(1, Math.round(duration / 60));
   const firstExercise = payload?.sessionConfig?.items?.[0]?.exerciseId || 'infinity';
   const ballColor = payload?.sessionConfig?.ballColor || '#ffffff';
-  const channelName = payload?.channel?.name || 'daily visual training';
-
-  ctx.fillStyle = '#f8fafc';
-  ctx.font = '700 48px Arial';
-  const words = title.split(/\s+/);
-  let line = ''; let y = 390;
-  for (const word of words) {
-    const next = line ? `${line} ${word}` : word;
-    if (ctx.measureText(next).width > 550 && line) { ctx.fillText(line, 60, y); line = word; y += 58; }
-    else line = next;
-  }
-  if (line) ctx.fillText(line, 60, y);
-  ctx.font = '500 22px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  ctx.fillText('guided visual training', 60, y + 52);
-  ctx.font = '700 28px Arial'; ctx.fillStyle = '#ffffff'; ctx.fillText(`${minutes} min`, 60, y + 105);
-  ctx.font = '600 20px Arial'; ctx.fillStyle = 'rgba(255,255,255,0.75)'; ctx.fillText(channelName, 60, y + 145);
 
   // Draw exercise pattern based on first exercise
-  const cx = width * 0.73;
-  const cy = height * 0.46;
-  const rx = width * 0.32;
-  const ry = height * 0.28;
+  const cx = width / 2;
+  const cy = height / 2;
+  const rx = width * 0.36;
+  const ry = height * 0.34;
   
   // Draw the exercise movement pattern
   ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-  ctx.lineWidth = 3;
-  ctx.setLineDash([8, 8]);
+  ctx.lineWidth = 3 * scale;
+  ctx.setLineDash([8 * scale, 8 * scale]);
   
   const drawExercisePattern = (exerciseId) => {
     ctx.beginPath();
@@ -755,30 +740,26 @@ const generateStudioThumbnail = async (payload) => {
     }
   })();
   
-  const ballRadius = 100 * (currentPos.scale || 1);
+  const ballRadius = Math.max(34, Number(payload?.sessionConfig?.ballSize || 50) * (height / 1080)) * (currentPos.scale || 1);
   ctx.beginPath(); 
-  ctx.arc(currentPos.x, currentPos.y, ballRadius, 0, Math.PI * 2); 
-  ctx.fillStyle = ballColor; 
-  ctx.shadowColor = ballColor; 
-  ctx.shadowBlur = 50; 
+  ctx.arc(currentPos.x, currentPos.y, ballRadius + 1.5, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.65)';
   ctx.fill(); 
-  ctx.shadowBlur = 0;
-  
-  // Draw target circle
-  ctx.strokeStyle = 'rgba(255,255,255,0.28)'; 
-  ctx.lineWidth = 2; 
+  ctx.beginPath();
+  ctx.arc(currentPos.x, currentPos.y, ballRadius, 0, Math.PI * 2);
+  ctx.fillStyle = ballColor;
+  ctx.fill();
+  ctx.beginPath();
+  ctx.arc(currentPos.x - ballRadius * 0.28, currentPos.y - ballRadius * 0.28, ballRadius * 0.18, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.55)';
+  ctx.fill();
+
+  // Keep the studio's subtle center guide without adding thumbnail copy.
+  ctx.strokeStyle = 'rgba(255,255,255,0.18)';
+  ctx.lineWidth = 2;
   ctx.beginPath(); 
-  ctx.arc(cx, cy, 150, 0, Math.PI * 2); 
+  ctx.arc(cx, cy, 100 * scale, 0, Math.PI * 2);
   ctx.stroke();
-  
-  ctx.fillStyle = 'rgba(255,255,255,0.62)'; 
-  ctx.font = '600 18px Arial'; 
-  ctx.fillText(String(firstExercise).replace(/_/g, ' '), width * 0.62, height * 0.82);
-  ctx.fillStyle = 'rgba(255,255,255,0.18)'; 
-  ctx.fillRect(0, height - 48, width, 48);
-  ctx.fillStyle = '#f8fafc'; 
-  ctx.font = '600 16px Arial'; 
-  ctx.fillText('ZEN VISION', 34, height - 18);
 
   await writeFile(thumbnailPath, canvas.toBuffer('image/png'));
   return thumbnailPath;
@@ -848,7 +829,7 @@ const uploadToYouTube = async (payload) => {
         const thumbnailUrl = await uploadFileToObjectStorage(thumbnailPath, `thumbnails/${videoId}.png`, 'image/png');
         if (thumbnailUrl) console.log(`[storage] thumbnail stored at ${thumbnailUrl}`);
       } catch (storageError) {
-        console.warn(`[storage] thumbnail archive failed for video ${videoId}: ${storageError instanceof Error ? storageError.message : storageError}`);
+        console.warn(`[storage] thumbnail archive failed for video ${videoId}: ${describeError(storageError)}`);
       } finally {
         await unlink(thumbnailPath).catch(() => {});
       }
@@ -1279,6 +1260,32 @@ const server = http.createServer(async (req, res) => {
     } catch (error) {
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ success: false, error: error instanceof Error ? error.message : String(error) }));
+    }
+    return;
+  }
+
+  if (req.method === 'POST' && url.pathname === '/api/workflows/render-worker/dispatch') {
+    try {
+      if (!GITHUB_TOKEN) throw new Error('GitHub workflow dispatch is not configured. Set GITHUB_TOKEN on the server.');
+      const response = await fetch(`https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/${GITHUB_WORKFLOW_FILE}/dispatches`, {
+        method: 'POST',
+        headers: {
+          Accept: 'application/vnd.github+json',
+          Authorization: `Bearer ${GITHUB_TOKEN}`,
+          'X-GitHub-Api-Version': '2022-11-28',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ ref: GITHUB_WORKFLOW_REF }),
+      });
+      if (!response.ok) {
+        const details = await response.text().catch(() => '');
+        throw new Error(`GitHub returned HTTP ${response.status}${details ? `: ${details}` : ''}`);
+      }
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true, message: 'Render worker workflow started.' }));
+    } catch (error) {
+      res.writeHead(502, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, message: describeError(error) }));
     }
     return;
   }
