@@ -332,7 +332,7 @@ export async function renderStudioSession(job, onProgress = () => {}) {
   }
   const inputs = ['-i', silentPath, '-stream_loop', '-1', '-i', musicPath];
   voices.forEach((voice) => inputs.push('-i', voice.path));
-  const musicVolume = Math.max(0, Math.min(1.5, renderable(config.musicVolume, 0.9))) * 0.7;
+  const musicVolume = Math.max(0, Math.min(1.5, renderable(config.musicVolume, 0.9))) * 0.35;
   const voiceVolume = Math.max(0, Math.min(1.5, renderable(config.voiceVolume, 0.95))) * 1.35;
   const filters = [`[1:a]volume=${musicVolume},atrim=duration=${duration},asetpts=PTS-STARTPTS[m]`];
   voices.forEach((voice, index) => filters.push(`[${index + 2}:a]adelay=${Math.round(voice.start)}|${Math.round(voice.start)},volume=${voiceVolume},atrim=duration=${duration},asetpts=PTS-STARTPTS[v${index}]`));

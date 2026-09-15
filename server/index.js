@@ -834,7 +834,6 @@ const uploadToYouTube = async (payload) => {
     let thumbnailUploaded = false;
     const thumbnailPath = videoId ? await generateStudioThumbnail(payload) : null;
     if (videoId && thumbnailPath) {
-      const thumbnailUrl = await uploadFileToObjectStorage(thumbnailPath, `thumbnails/${videoId}.png`, 'image/png');
       try {
         await youtube.thumbnails.set({
           videoId,
@@ -844,10 +843,15 @@ const uploadToYouTube = async (payload) => {
         console.log(`[youtube] video ${videoId} uploaded successfully with thumbnail`);
       } catch (thumbnailError) {
         console.warn(`[youtube] video ${videoId} uploaded successfully but thumbnail upload failed: ${thumbnailError instanceof Error ? thumbnailError.message : thumbnailError}`);
+      }
+      try {
+        const thumbnailUrl = await uploadFileToObjectStorage(thumbnailPath, `thumbnails/${videoId}.png`, 'image/png');
+        if (thumbnailUrl) console.log(`[storage] thumbnail stored at ${thumbnailUrl}`);
+      } catch (storageError) {
+        console.warn(`[storage] thumbnail archive failed for video ${videoId}: ${storageError instanceof Error ? storageError.message : storageError}`);
       } finally {
         await unlink(thumbnailPath).catch(() => {});
       }
-      if (thumbnailUrl) console.log(`[storage] thumbnail stored at ${thumbnailUrl}`);
     } else {
       console.log(`[youtube] video ${videoId} uploaded successfully (no thumbnail)`);
     }
