@@ -8,6 +8,9 @@ import { createCanvas } from '@napi-rs/canvas';
 import { calculateExercisePosition } from './exerciseUtils.js';
 import config from './config.js';
 
+// Ensure environment variables are loaded
+import 'dotenv/config';
+
 const renderable = (value, fallback) => Number.isFinite(Number(value)) ? Number(value) : fallback;
 
 function background(ctx, width, height, theme) {
@@ -118,8 +121,9 @@ export async function renderStudioSession(job, onProgress = () => {}) {
   // Render the simple eye-training scene at 1080p, then upscale the final
   // encode to true 4K. This keeps the output dimensions 3840x2160 while
   // avoiding a 4x canvas and memory cost for every frame.
-  const renderWidth = config.rendering.freeProfile ? 1280 : 1920;
-  const renderHeight = config.rendering.freeProfile ? 720 : 1080;
+  const freeProfile = config?.rendering?.freeProfile ?? process.env.RENDER_PROFILE === 'free';
+  const renderWidth = freeProfile ? 1280 : 1920;
+  const renderHeight = freeProfile ? 720 : 1080;
   const width = renderWidth;
   const height = renderHeight;
   const fps = 30;
