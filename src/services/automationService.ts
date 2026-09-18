@@ -40,7 +40,9 @@ const buildUniqueSessionTitle = (
     .map((name) => name!.replace(/\b\w/g, (letter) => letter.toUpperCase()))
     .join(' & ');
 
-  return `Daily Visual Training — ${focus || 'Foundational Eye Movement'} | ${durationMinutes}-Minute Session`;
+  const baseTitle = `Eye Exercises for Focus & Tracking | ${focus || 'Foundational Eye Movement'} | ${durationMinutes}-Min Routine`;
+
+  return baseTitle.slice(0, 100).trimEnd();
 };
 
 // One-time migration: purge all stale v1 and v2 keys so no dummy data leaks through
@@ -283,33 +285,46 @@ export class AutomationService {
       chapterTime += item.instructionSeconds + item.motionSeconds;
     });
 
+    const channelName = channel.name.trim();
+    const channelHandle = channel.channelHandle?.trim() || `@${channelName.replace(/\s+/g, '')}`;
     const description = [
-      `A guided ${durationMinutes}-minute visual training session from ${channel.name}.`,
-      `Follow the moving target smoothly and keep your head still while working through a varied sequence of tracking, fixation, and coordination exercises.`,
-      `Session focus: ${exerciseNames}.`,
-      `Designed for a calm daily practice with ${items.length} movement segments, spoken cues, and a low-distraction music bed.`,
+      `${durationMinutes}-minute eye exercise and visual training routine for focus, tracking, and screen-time breaks.`,
+      `Follow the moving target with your eyes while keeping your head still in this guided eye workout from ${channelName}.`,
+      `This session includes ${exerciseNames || 'smooth eye movements and visual focus practice'} with spoken cues and calm background music.`,
+      `Use this daily visual training routine as a simple, low-distraction practice. Stop if you feel discomfort and consult a qualified eye-care professional for medical concerns.`,
       `Chapters:\n${chapters.join('\n')}`,
-      `For general practice only; stop if you experience discomfort and consult a qualified eye-care professional for medical concerns.`,
-      `More sessions: ${channel.channelHandle || channel.name}`,
+      `Subscribe to ${channelName} for more guided eye exercises, focus training, and visual coordination sessions. ${channelHandle}`,
+      '#EyeExercises #EyeTraining #FocusTraining',
     ].join('\n\n');
 
-    const tags = [
+    const tags = Array.from(new Set([
       'eye training',
-      'vision therapy',
       'eye exercise',
+      'eye exercises',
+      'visual training',
+      'eye workout',
       'focus training',
-      'visual health',
-      channel.name.toLowerCase(),
+      'visual focus exercises',
+      'eye tracking exercise',
+      'smooth eye movements',
+      'screen time eye exercises',
+      'daily eye routine',
+      channelName.toLowerCase(),
       ...exerciseNames.split(',').map((name) => name.trim().toLowerCase()).filter(Boolean),
-      'daily visual training',
-      'smooth pursuit',
-      'eye movement exercise',
-      'focus practice',
-    ].slice(0, 12);
+    ].map((tag) => tag.replace(/[^a-z0-9 _-]+/gi, '').trim()).filter(Boolean))).slice(0, 30);
+
+    const limitedTags: string[] = [];
+    let tagLength = 0;
+    for (const tag of tags) {
+      const nextLength = tagLength + tag.length + (limitedTags.length > 0 ? 1 : 0);
+      if (nextLength > 500) break;
+      limitedTags.push(tag);
+      tagLength = nextLength;
+    }
 
     return {
       description,
-      tags: Array.from(new Set(tags.map((tag) => tag.replace(/[^a-z0-9 _-]+/gi, '').trim()).filter(Boolean))),
+      tags: limitedTags,
       videoUrl: `https://www.youtube.com/results?search_query=${encodeURIComponent(title)}`,
     };
   }
