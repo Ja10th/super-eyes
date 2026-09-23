@@ -31,6 +31,7 @@ const normalizeScheduledTitle = (value: unknown): string => {
 const buildUniqueSessionTitle = (
   durationMinutes: number,
   items: ReturnType<typeof generateSmartRandomSession>,
+  uniqueSuffix = '',
 ): string => {
   const focus = items
     .filter((item) => item.exerciseId !== 'rest_blink')
@@ -40,9 +41,9 @@ const buildUniqueSessionTitle = (
     .map((name) => name!.replace(/\b\w/g, (letter) => letter.toUpperCase()))
     .join(' & ');
 
-  const baseTitle = `Eye Exercises for Focus & Tracking | ${focus || 'Foundational Eye Movement'} | ${durationMinutes}-Min Routine`;
-
-  return baseTitle.slice(0, 100).trimEnd();
+  const prefix = `Guided Eye Exercises for Focus & Tracking | ${focus || 'Foundational Eye Movement'} | ${durationMinutes}-Minute Workout`;
+  const suffix = uniqueSuffix.slice(0, 24);
+  return `${prefix.slice(0, Math.max(1, 100 - suffix.length)).trimEnd()}${suffix}`;
 };
 
 // One-time migration: purge all stale v1 and v2 keys so no dummy data leaks through
@@ -272,9 +273,8 @@ export class AutomationService {
       const remaining = Math.floor(seconds % 60).toString().padStart(2, '0');
       return `${minutes.toString().padStart(2, '0')}:${remaining}`;
     };
-    const exerciseNames = items
-      .map((item) => item.exerciseId)
-      .filter(Boolean)
+    const exerciseIds = items.map((item) => item.exerciseId).filter(Boolean);
+    const exerciseNames = exerciseIds
       .slice(0, 8)
       .map((id) => EXERCISE_DEFINITIONS[id]?.shortTitle || id)
       .join(', ');
@@ -287,30 +287,36 @@ export class AutomationService {
 
     const channelName = channel.name.trim();
     const channelHandle = channel.channelHandle?.trim() || `@${channelName.replace(/\s+/g, '')}`;
+    const keywordLine = 'eye exercises, eye tracking, visual focus, smooth pursuit, screen-time eye relief, and daily eye training';
     const description = [
-      `${durationMinutes}-minute eye exercise and visual training routine for focus, tracking, and screen-time breaks.`,
-      `Follow the moving target with your eyes while keeping your head still in this guided eye workout from ${channelName}.`,
-      `This session includes ${exerciseNames || 'smooth eye movements and visual focus practice'} with spoken cues and calm background music.`,
-      `Use this daily visual training routine as a simple, low-distraction practice. Stop if you feel discomfort and consult a qualified eye-care professional for medical concerns.`,
+      `${durationMinutes}-minute guided eye exercise workout for focus, visual tracking, and screen-time breaks.`,
+      `Follow the moving target with your eyes while keeping your head still in this calm visual training session from ${channelName}. It is designed for people searching for eye exercises, focus training, and smooth pursuit practice.`,
+      `Today’s routine includes ${exerciseNames || 'smooth eye movements and visual focus practice'} with spoken cues and low-distraction background music. Keywords: ${keywordLine}.`,
+      `Use this as general visual practice, not medical treatment. Stop if you feel pain, dizziness, blurred vision, or other discomfort, and consult a qualified eye-care professional for medical concerns.`,
       `Chapters:\n${chapters.join('\n')}`,
       `Subscribe to ${channelName} for more guided eye exercises, focus training, and visual coordination sessions. ${channelHandle}`,
-      '#EyeExercises #EyeTraining #FocusTraining',
+      '#EyeExercises #EyeTraining #VisualTraining #FocusTraining',
     ].join('\n\n');
 
     const tags = Array.from(new Set([
       'eye training',
-      'eye exercise',
       'eye exercises',
+      'guided eye exercises',
       'visual training',
-      'eye workout',
+      'eye workout for focus',
       'focus training',
       'visual focus exercises',
       'eye tracking exercise',
       'smooth eye movements',
+      'smooth pursuit exercise',
       'screen time eye exercises',
+      'eye strain relief exercises',
       'daily eye routine',
+      'visual coordination',
       channelName.toLowerCase(),
-      ...exerciseNames.split(',').map((name) => name.trim().toLowerCase()).filter(Boolean),
+      ...exerciseIds.map((id) => EXERCISE_DEFINITIONS[id]?.shortTitle || id)
+        .map((name) => name.trim().toLowerCase())
+        .filter(Boolean),
     ].map((tag) => tag.replace(/[^a-z0-9 _-]+/gi, '').trim()).filter(Boolean))).slice(0, 30);
 
     const limitedTags: string[] = [];
@@ -363,7 +369,7 @@ export class AutomationService {
 
         // Generate a completely unique, randomized session for this slot
         const items = generateSmartRandomSession(durationMins);
-        const postTitle = buildUniqueSessionTitle(durationMins, items);
+        const postTitle = buildUniqueSessionTitle(durationMins, items, ` | ${dateStr.slice(5).replace('-', '/')}-${timeStr.replace(':', '')}`);
 
         const sessionConfig: VideoSessionConfig = {
           channelId: channel.id,

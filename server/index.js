@@ -974,6 +974,61 @@ const buildDailySession = (durationMinutes, dateKey, slotIndex) => {
   };
 };
 
+const SEO_EXERCISE_NAMES = {
+  horizontal: 'horizontal tracking',
+  vertical: 'vertical tracking',
+  diagonal: 'diagonal tracking',
+  circular: 'circular eye movements',
+  infinity: 'infinity loop',
+  near_far: 'near and far focus',
+  saccades: 'saccade training',
+  rest_blink: 'blink reset',
+  spiral: 'spiral tracking',
+  peripheral: 'peripheral vision',
+  box: 'box pattern tracking',
+  zigzag: 'zigzag tracking',
+  diamond: 'diamond pattern',
+  star: 'star pattern tracking',
+  hourglass: 'hourglass tracking',
+  butterfly: 'butterfly pattern',
+  pendulum: 'pendulum tracking',
+  figure_s: 'figure S tracking',
+  cross_jump: 'cross jump fixation',
+  hexagon: 'hexagon tracking',
+};
+
+const buildDailyVideoMeta = (channelName, durationMinutes, sessionConfig, dateKey, scheduledTime) => {
+  const ids = (sessionConfig.items || []).map((item) => item.exerciseId).filter((id) => id !== 'rest_blink');
+  const names = ids.map((id) => SEO_EXERCISE_NAMES[id] || String(id).replace(/_/g, ' '));
+  const focus = names.slice(0, 2).join(' + ') || 'guided visual focus';
+  const titleSuffix = ` | ${dateKey.slice(5).replace('-', '/')}-${scheduledTime.replace(':', '')}`;
+  const titlePrefix = `Guided Eye Exercises for Focus & Tracking | ${focus} | ${durationMinutes}-Minute Workout`;
+  const title = `${titlePrefix.slice(0, Math.max(1, 100 - titleSuffix.length)).trimEnd()}${titleSuffix}`;
+  const chapters = ['00:00 Welcome and breathing reset'];
+  let chapterSeconds = 4.5;
+  (sessionConfig.items || []).forEach((item, index) => {
+    const minutes = Math.floor(chapterSeconds / 60).toString().padStart(2, '0');
+    const seconds = Math.floor(chapterSeconds % 60).toString().padStart(2, '0');
+    chapters.push(`${minutes}:${seconds} ${index + 1}. ${SEO_EXERCISE_NAMES[item.exerciseId] || String(item.exerciseId).replace(/_/g, ' ')}`);
+    chapterSeconds += Number(item.instructionSeconds || 5) + Number(item.motionSeconds || 0);
+  });
+  const description = [
+    `${durationMinutes}-minute guided eye exercise workout for focus, visual tracking, and screen-time breaks.`,
+    `Follow the moving target with your eyes while keeping your head still in this calm visual training session from ${channelName || 'Super Eyes'}. This routine is built around ${names.join(', ') || 'smooth eye movements and visual focus practice'}.`,
+    `Search topics covered: eye exercises, eye tracking, smooth pursuit, visual focus, screen-time eye relief, and daily eye training. Use this as general visual practice, not medical treatment; stop if you feel discomfort and consult a qualified eye-care professional for medical concerns.`,
+    `Chapters:\n${chapters.join('\n')}`,
+    `Subscribe for more guided eye exercises, focus training, and visual coordination workouts.`,
+    '#EyeExercises #EyeTraining #VisualTraining #FocusTraining',
+  ].join('\n\n');
+  const tags = Array.from(new Set([
+    'eye exercises', 'guided eye exercises', 'eye training', 'visual training', 'eye workout for focus',
+    'focus training', 'eye tracking exercise', 'smooth pursuit exercise', 'smooth eye movements',
+    'screen time eye exercises', 'eye strain relief exercises', 'visual coordination',
+    ...(channelName ? [channelName.toLowerCase()] : []), ...names.map((name) => name.toLowerCase()),
+  ])).filter(Boolean).slice(0, 30);
+  return { title, description, tags };
+};
+
 const scheduleNextDailyBatch = async () => {
   await ensureJobsStore();
   if (!dbPool) throw new Error('Daily scheduler requires DATABASE_URL.');
@@ -1009,13 +1064,14 @@ const scheduleNextDailyBatch = async () => {
       const durationMinutes = [7, 8, 10][(slotIndex + Number(dateKey.slice(-2))) % 3];
       const sessionConfig = buildDailySession(durationMinutes, dateKey, slotIndex);
       sessionConfig.channelId = connection.channel_id;
-      sessionConfig.title = `${connection.channel_name || 'Daily Visual Training'} — ${sessionConfig.title.replace('Daily Visual Training — ', '')}`;
+      const videoMeta = buildDailyVideoMeta(connection.channel_name, durationMinutes, sessionConfig, dateKey, scheduledTime);
+      sessionConfig.title = videoMeta.title;
       await enqueueJob({
         event: 'youtube.video.upload',
         queueKey,
-        title: sessionConfig.title,
-        description: `A guided ${durationMinutes}-minute visual training session from ${connection.channel_name || 'Super Eyes'}. Follow the moving target smoothly and keep your head still through a calm sequence of tracking, fixation, and coordination exercises. For general practice only; stop if you experience discomfort.`,
-        tags: ['eye training', 'visual training', 'smooth pursuit', 'eye exercises', 'daily eye workout', 'super eyes'],
+        title: videoMeta.title,
+        description: videoMeta.description,
+        tags: videoMeta.tags,
         channel: { id: connection.channel_id, name: connection.channel_name, handle: connection.channel_handle, youtubeChannelId: connection.channel_id },
         video: { id: queueKey, title: sessionConfig.title, scheduledDate: dateKey, scheduledTime, durationMinutes, durationSeconds: durationMinutes * 60, resolution: '4k', sessionConfig },
         sessionConfig,
