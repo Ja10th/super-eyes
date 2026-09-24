@@ -159,6 +159,8 @@ export interface ScheduledPost {
   channelName: string;
   youtubeChannelId: string;
   title: string;
+  description?: string;
+  tags?: string[];
   scheduledDate: string;
   scheduledTime: string;
   durationMinutes: number;

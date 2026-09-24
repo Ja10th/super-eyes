@@ -849,7 +849,7 @@ const uploadToYouTube = async (payload) => {
   }
 
   const { buffer, fileName } = await resolveVideoInput(videoInput);
-  const metadata = payload.video || payload;
+  const metadata = payload.video || {};
   const title = metadata.title || payload.title || 'Eye Training Upload';
   const description = metadata.description || payload.description || 'Uploaded by eye-training-video-platform';
   const tags = Array.from(new Set(
@@ -1073,7 +1073,18 @@ const scheduleNextDailyBatch = async () => {
         description: videoMeta.description,
         tags: videoMeta.tags,
         channel: { id: connection.channel_id, name: connection.channel_name, handle: connection.channel_handle, youtubeChannelId: connection.channel_id },
-        video: { id: queueKey, title: sessionConfig.title, scheduledDate: dateKey, scheduledTime, durationMinutes, durationSeconds: durationMinutes * 60, resolution: '4k', sessionConfig },
+        video: {
+          id: queueKey,
+          title: videoMeta.title,
+          description: videoMeta.description,
+          tags: videoMeta.tags,
+          scheduledDate: dateKey,
+          scheduledTime,
+          durationMinutes,
+          durationSeconds: durationMinutes * 60,
+          resolution: '4k',
+          sessionConfig,
+        },
         sessionConfig,
         durationSeconds: durationMinutes * 60,
       });
